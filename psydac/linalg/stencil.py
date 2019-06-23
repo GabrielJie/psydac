@@ -208,9 +208,7 @@ class StencilVector( Vector ):
 
         assert isinstance( v, StencilVector )
         assert v._space is self._space
-
-        res = self._dot(self._data, v._data , self.pads)
-
+        res = self._dot(self._data, v._data , self.pads, self._data.shape)
         if self._space.parallel:
             res = self._space.cart.comm_cart.allreduce( res, op=MPI.SUM )
 
@@ -218,9 +216,8 @@ class StencilVector( Vector ):
 
     #...
     @staticmethod
-    def _dot(v1, v2, pads):
-        ndim = len(v1.shape)
-        index = tuple( slice(p,-p) for p in pads)
+    def _dot(v1, v2, pads, shape):
+        index = tuple( slice(p,n-p) for p,n in zip(pads, shape))
         return np.dot(v1[index].flat, v2[index].flat)
 
     #...
@@ -228,6 +225,7 @@ class StencilVector( Vector ):
         w = StencilVector( self._space )
         w._data[:] = self._data[:]
         w._sync    = self._sync
+        w._dot     = self._dot
         return w
 
     #...
@@ -235,6 +233,7 @@ class StencilVector( Vector ):
         w = StencilVector( self._space )
         w._data = self._data * a
         w._sync = self._sync
+        w._dot  = self._dot
         return w
 
     #...
@@ -242,6 +241,7 @@ class StencilVector( Vector ):
         w = StencilVector( self._space )
         w._data = a * self._data
         w._sync = self._sync
+        w._dot  = self._dot
         return w
 
     #...
@@ -251,6 +251,7 @@ class StencilVector( Vector ):
         w = StencilVector( self._space )
         w._data = self._data  +  v._data
         w._sync = self._sync and v._sync
+        w._dot  = self._dot
         return w
 
     #...
@@ -260,6 +261,7 @@ class StencilVector( Vector ):
         w = StencilVector( self._space )
         w._data = self._data  -  v._data
         w._sync = self._sync and v._sync
+        w._dot  = self._dot
         return w
 
     #...
@@ -588,7 +590,7 @@ class StencilMatrix( Matrix ):
         # Number of rows in matrix (along each dimension)
         nrows       = [ed-s+1 for s,ed in zip(ssd, eed)]
         nrows_extra = [0 if ec<=ed else ec-ed for ec,ed in zip(eec,eed)]
-        
+
         self._dot(self._data, v._data, out._data, nrows, nrows_extra, pp)
 
         # IMPORTANT: flag that ghost regions are not up-to-date
@@ -684,6 +686,7 @@ class StencilMatrix( Matrix ):
     def copy( self ):
         M = StencilMatrix( self.domain, self.codomain, self._pads )
         M._data[:] = self._data[:]
+        M._dot = self._dot
         return M
 
     #...
