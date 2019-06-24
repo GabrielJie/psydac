@@ -256,7 +256,7 @@ def run_poisson(domain, solution, f, ncells, degree, backend):
 ###############################################################################
 
 #==============================================================================
-def test_perf_poisson_2d(ncells=[2**3,2**3], degree=[2,2]):
+def test_perf_poisson_2d(ncells=[2**7,2**7], degree=[2,2]):
     domain = Square()
     x,y = domain.coordinates
 
