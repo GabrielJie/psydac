@@ -218,27 +218,29 @@ def run_poisson(domain, solution, f, ncells, degree, backend):
     # ...
 
     # ... create the computational domain from a topological domain
-    domain_h = discretize(domain, ncells=ncells)
+    domain_h = discretize(domain, ncells=ncells,comm=mpi_comm)
     # ...
 
     # ... discrete spaces
-    Vh = discretize(V, domain_h, degree=degree, comm=mpi_comm)
+    Vh = discretize(V, domain_h, degree=degree)
     # ...
 
     # dict to store timings
     d = {}
 
     # ... bilinear form
-    ah = discretize(a, domain_h, [Vh, Vh], backend=backend, comm=mpi_comm)
+    ah = discretize(a, domain_h, [Vh, Vh], backend=backend)
 
+    ah.assemble();
     tb = time.time(); M = ah.assemble(); te = time.time()
 
     d['matrix'] = te-tb
     # ...
 
     # ... linear form
-    lh = discretize(l, domain_h, Vh, backend=backend, comm=mpi_comm)
+    lh = discretize(l, domain_h, Vh, backend=backend)
 
+    lh.assemble();
     tb = time.time(); L = lh.assemble(); te = time.time()
 
     d['rhs'] = te-tb
@@ -248,8 +250,9 @@ def run_poisson(domain, solution, f, ncells, degree, backend):
     # coeff of phi are 0
     phi = FemField( Vh )
 
-    l2norm_h = discretize(l2norm, domain_h, Vh, backend=backend, comm=mpi_comm)
+    l2norm_h = discretize(l2norm, domain_h, Vh, backend=backend)
 
+    l2norm_h.assemble(F=phi);
     tb = time.time(); err = l2norm_h.assemble(F=phi); te = time.time()
 
     d['l2norm'] = te-tb

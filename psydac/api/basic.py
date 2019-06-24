@@ -525,7 +525,6 @@ class BasicDiscrete(BasicCodeGen):
         target              = kwargs.pop('target', None)
         boundary            = kwargs.pop('boundary', None)
         # ...
-
         # ...
         if not target:
             if len(kernel_expr) > 1:

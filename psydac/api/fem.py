@@ -68,6 +68,7 @@ class DiscreteBilinearForm(BasicDiscrete):
         # ...
         self._spaces = args[1]
         # ...
+
         kwargs['discrete_space']      = self.spaces
         kwargs['mapping']             = self.spaces[0].symbolic_mapping
         kwargs['is_rational_mapping'] = is_rational_mapping
