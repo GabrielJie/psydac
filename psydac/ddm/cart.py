@@ -61,7 +61,7 @@ class CartDecomposition():
         (optional: default is MPI_COMM_WORLD).
 
     """
-    def __init__( self, npts, pads, periods, reorder, comm=MPI.COMM_WORLD ):
+    def __init__( self, npts, pads, periods, reorder, comm=MPI.COMM_WORLD, nprocs=None ):
 
         # Check input arguments
         # TODO: check that arguments are identical across all processes
@@ -91,8 +91,12 @@ class CartDecomposition():
         # ...
         # Know the number of processes along each direction
 #        self._dims = MPI.Compute_dims( self._size, self._ndims )
-        mpi_dims, block_shape = mpi_compute_dims( self._size, npts, pads )
-        self._dims = mpi_dims
+        if nprocs is None:
+            mpi_dims, block_shape = mpi_compute_dims( self._size, npts, pads )
+            self._dims = mpi_dims
+        else:
+            assert np.product( nprocs ) <= self._size
+            self._dims = tuple( nprocs )
         # ...
 
         # ...
@@ -144,7 +148,7 @@ class CartDecomposition():
         self._global_ends   = [None]*self._ndims
         for axis in range( self._ndims ):
             n =     npts[axis]
-            d = mpi_dims[axis]
+            d = self._dims[axis]
             self._global_starts[axis] = np.array( [( c   *n)//d   for c in range( d )] )
             self._global_ends  [axis] = np.array( [((c+1)*n)//d-1 for c in range( d )] )
 

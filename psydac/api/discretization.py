@@ -323,6 +323,7 @@ def discretize_space(V, domain_h, *args, **kwargs):
     degree           = kwargs.pop('degree', None)
     normalize        = kwargs.pop('normalize', True)
     comm             = domain_h.comm
+    nprocs           = domain_h.nprocs
     symbolic_mapping = None
     kind             = V.kind
     ldim             = V.ldim
@@ -361,7 +362,7 @@ def discretize_space(V, domain_h, *args, **kwargs):
 
         # Create 1D finite element spaces and precompute quadrature data
         spaces = [SplineSpace( p, grid=grid ) for p,grid in zip(degree, grids)]
-        Vh = TensorFemSpace( *spaces, comm=comm )
+        Vh = TensorFemSpace( *spaces, comm=comm, nprocs=nprocs )
         
         if isinstance(kind, L2SpaceType):
   
@@ -426,18 +427,19 @@ def discretize_domain(domain, *args, **kwargs):
     filename = kwargs.pop('filename', None)
     ncells   = kwargs.pop('ncells',   None)
     comm     = kwargs.pop('comm',     None)
+    nprocs   = kwargs.pop('nprocs',   None)
 
     if not( ncells is None ):
         dtype = domain.dtype
 
         if dtype['type'].lower() == 'line' :
-            return Geometry.as_line(ncells, comm=comm)
+            return Geometry.as_line(ncells, comm=comm, nprocs=nrpocs)
 
         elif dtype['type'].lower() == 'square' :
-            return Geometry.as_square(ncells, comm=comm)
+            return Geometry.as_square(ncells, comm=comm, nprocs=nprocs)
 
         elif dtype['type'].lower() == 'cube' :
-            return Geometry.as_cube(ncells, comm=comm)
+            return Geometry.as_cube(ncells, comm=comm, nprocs=nprocs)
 
         else:
             msg = 'no corresponding discrete geometry is available, given {}'
@@ -446,7 +448,7 @@ def discretize_domain(domain, *args, **kwargs):
             raise ValueError(msg)
 
     elif not( filename is None ):
-        geometry = Geometry(filename=filename, comm=comm)
+        geometry = Geometry(filename=filename, comm=comm, nprocs=nprocs)
 
     return geometry
 

@@ -36,7 +36,7 @@ class Geometry( object ):
     # Option [1]: from a (domain, mappings) or a file
     #--------------------------------------------------------------------------
     def __init__( self, domain=None, mappings=None,
-                  filename=None, comm=MPI.COMM_WORLD ):
+                  filename=None, comm=MPI.COMM_WORLD, nprocs=None ):
 
         # ... read the geometry if the filename is given
         if not( filename is None ):
@@ -63,7 +63,8 @@ class Geometry( object ):
             raise ValueError('Wrong input')
         # ...
 
-        self._comm = comm
+        self._comm   = comm
+        self._nprocs = nprocs
 
     #--------------------------------------------------------------------------
     # Option [2]: from a discrete mapping
@@ -128,6 +129,10 @@ class Geometry( object ):
     @property
     def comm(self):
         return self._comm
+        
+    @property
+    def nprocs(self):
+        return self._nprocs
 
     @property
     def domain(self):

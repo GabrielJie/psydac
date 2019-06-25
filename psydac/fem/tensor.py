@@ -44,13 +44,17 @@ class TensorFemSpace( FemSpace ):
             # parallel case
             comm = kwargs['comm']
             assert isinstance(comm, MPI.Comm)
-
+            nprocs = kwargs.pop('nprocs', None)
+            if not nprocs is None:
+                assert all( isinstance(p, int) for p in nprocs)
+            
             cart = CartDecomposition(
                 npts    = npts,
                 pads    = pads,
                 periods = periods,
                 reorder = True,
                 comm    = comm
+                nprocs  = nprocs
             )
 
             self._vector_space = StencilVectorSpace(cart)
