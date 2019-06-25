@@ -92,29 +92,29 @@ class Geometry( object ):
     #--------------------------------------------------------------------------
     # TODO shall we create a discrete line/square/cube?
     @classmethod
-    def as_line( cls, ncells=None, comm=None ):
+    def as_line( cls, ncells=None, comm=None, nprocs=None ):
         domain = Line(name='Omega')
         mappings = {'Omega': None}
 
-        geo = Geometry(domain=domain, mappings=mappings, comm=comm)
+        geo = Geometry(domain=domain, mappings=mappings, comm=comm, nprocs=nprocs)
         setattr(geo, 'ncells', ncells)
         return geo
 
     @classmethod
-    def as_square( cls, ncells=None, comm=None ):
+    def as_square( cls, ncells=None, comm=None, nprocs=None ):
         domain = Square(name='Omega')
         mappings = {'Omega': None}
 
-        geo = Geometry(domain=domain, mappings=mappings, comm=comm)
+        geo = Geometry(domain=domain, mappings=mappings, comm=comm, nprocs=nprocs)
         setattr(geo, 'ncells', ncells)
         return geo
 
     @classmethod
-    def as_cube( cls, ncells=None, comm=None ):
+    def as_cube( cls, ncells=None, comm=None, nprocs=None ):
         domain = Cube(name='Omega')
         mappings = {'Omega': None}
 
-        geo = Geometry(domain=domain, mappings=mappings, comm=comm)
+        geo = Geometry(domain=domain, mappings=mappings, comm=comm, nprocs=nprocs)
         setattr(geo, 'ncells', ncells)
         return geo
 

@@ -53,7 +53,7 @@ class TensorFemSpace( FemSpace ):
                 pads    = pads,
                 periods = periods,
                 reorder = True,
-                comm    = comm
+                comm    = comm,
                 nprocs  = nprocs
             )
 
