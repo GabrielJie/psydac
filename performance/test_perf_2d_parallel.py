@@ -400,8 +400,6 @@ def test_perf_poisson_2d_3():
 if __name__ == '__main__':
 
     # ... examples without mapping
-#    test_perf_poisson_2d_1()
+    test_perf_poisson_2d_1()
 #    test_perf_poisson_2d_2()
-    test_perf_poisson_2d_3()
-
-    # ...
+#    test_perf_poisson_2d_3()
