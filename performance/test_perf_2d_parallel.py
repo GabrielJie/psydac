@@ -1,5 +1,7 @@
 # -*- coding: UTF-8 -*-
 
+import numpy as np
+
 from sympy import pi, cos, sin
 from sympy import S
 
@@ -28,7 +30,7 @@ from tabulate import tabulate
 from collections import namedtuple
 from mpi4py import MPI
 
-Timing = namedtuple('Timing', ['kind', 'python', 'pyccel'])
+Timing = namedtuple('Timing', ['kind', 'time'])
 
 DEBUG = False
 
@@ -183,21 +185,20 @@ mpi_rank = mpi_comm.Get_rank()
 
 
 #==============================================================================
-def print_timing(ls):
+def print_timing(ls, degrees):
     # ...
     table   = []
-    headers = ['Assembly time', 'Python', 'Pyccel', 'Speedup']
+    headers = ['Assembly time'] + degrees
 
     for timing in ls:
-        speedup = timing.python / timing.pyccel
-        line   = [timing.kind, timing.python, timing.pyccel, speedup]
+        line   = [timing.kind] + timing.time
         table.append(line)
 
     print(tabulate(table, headers=headers, tablefmt='latex'))
     # ...
 
 #==============================================================================
-def run_poisson(domain, solution, f, ncells, degree, backend):
+def run_poisson(domain, solution, f, ncells, degree, backend, nprocs=None):
 
     # ... abstract model
     V = FunctionSpace('V', domain)
@@ -216,15 +217,13 @@ def run_poisson(domain, solution, f, ncells, degree, backend):
     l2norm = Norm(error, domain, kind='l2')
     h1norm = Norm(error, domain, kind='h1')
     # ...
-
     # ... create the computational domain from a topological domain
-    domain_h = discretize(domain, ncells=ncells,comm=mpi_comm)
+    domain_h = discretize(domain, ncells=ncells,comm=mpi_comm, nprocs=nprocs)
     # ...
 
     # ... discrete spaces
     Vh = discretize(V, domain_h, degree=degree)
     # ...
-
     # dict to store timings
     d = {}
 
@@ -255,51 +254,76 @@ def run_poisson(domain, solution, f, ncells, degree, backend):
     l2norm_h.assemble(F=phi);
     tb = time.time(); err = l2norm_h.assemble(F=phi); te = time.time()
 
+
     d['l2norm'] = te-tb
     # ...
 
     return d
 
 ###############################################################################
-#            SERIAL TESTS
+#            PARALLEL TESTS
 ###############################################################################
 
 #==============================================================================
-def test_perf_poisson_2d(ncells=[2**3,2**3], degree=[2,2]):
+def test_perf_poisson_2d_1():
     domain = Square()
     x,y = domain.coordinates
 
     solution = sin(pi*x)*sin(pi*y)
     f        = 2*pi**2*sin(pi*x)*sin(pi*y)
 
-    # using Python
-    d_py = run_poisson( domain, solution, f,
-                        ncells=ncells, degree=degree,
-                        backend=PSYDAC_BACKEND_PYTHON )
-
+    d_f90 = {}
     # using Pyccel
-    d_f90 = run_poisson( domain, solution, f,
-                         ncells=ncells, degree=degree,
+    for n in range(8,9):
+        d_d = {}
+        for d in range(2, 8):
+            d_d[d] = run_poisson( domain, solution, f,
+                         ncells=[2**n,2**n], degree=[d,d],
                          backend=PSYDAC_BACKEND_GPYCCEL )
+        d_f90[n] = d_d
 
-    # ... add every new backend here
-    d_all = [d_py, d_f90]
+    if mpi_rank == 0:
+        keys = sorted(list(d_f90[n][2].keys()))
+        timings = []
+        for key in keys:
+            args = [d[key] for d in d_f90[n].values()]
+            timing = Timing(key, args)
+            timings += [timing]
 
-    keys = sorted(list(d_py.keys()))
-    timings = []
-    for key in keys:
-        args = [d[key] for d in d_all]
-        timing = Timing(key, *args)
-        timings += [timing]
-
-    print_timing(timings)
+        print_timing(timings, list(d_f90[n].keys()))
     # ...
+def test_perf_poisson_2d_2():
+    domain = Square()
+    x,y = domain.coordinates
 
+    solution = sin(pi*x)*sin(pi*y)
+    f        = 2*pi**2*sin(pi*x)*sin(pi*y)
+
+    d_f90 = {}
+    # using Pyccel
+    p1,p2 = int(np.sqrt(mpi_size)),int(np.sqrt(mpi_size))
+
+    for d in range(2,3):
+        d_f90[d] = run_poisson( domain, solution, f,
+                         ncells=[2**2*p1, 2**2*p2], degree=[d, d],
+                         backend=PSYDAC_BACKEND_GPYCCEL,nprocs=[p1,p2] )
+    
+
+    if mpi_rank == 0:
+        keys = d_f90[2].keys()
+        timings = []
+        for key in keys:
+            args = [d_f90[i][key] for i in range(2,3)]
+            timing = Timing(key, args)
+            timings += [timing]
+
+        print_timing(timings, list(d_f90.keys()))
 ###############################################
 if __name__ == '__main__':
 
     # ... examples without mapping
-    test_perf_poisson_2d()
+#    test_perf_poisson_2d_1()
+    test_perf_poisson_2d_2()
 #    test_api_vector_poisson_2d()
 #    test_api_stokes_2d()
     # ...
