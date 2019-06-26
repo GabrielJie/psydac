@@ -433,7 +433,7 @@ def discretize_domain(domain, *args, **kwargs):
         dtype = domain.dtype
 
         if dtype['type'].lower() == 'line' :
-            return Geometry.as_line(ncells, comm=comm, nprocs=nrpocs)
+            return Geometry.as_line(ncells, comm=comm, nprocs=nprocs)
 
         elif dtype['type'].lower() == 'square' :
             return Geometry.as_square(ncells, comm=comm, nprocs=nprocs)
