@@ -21,13 +21,13 @@ from psydac.fem.basic   import FemField
 from psydac.fem.splines import SplineSpace
 from psydac.fem.tensor  import TensorFemSpace
 from psydac.api.discretization import discretize
-from psydac.api.settings import PSYDAC_BACKEND_PYTHON, PSYDAC_BACKEND_GPYCCEL
+from psydac.api.settings import PSYDAC_BACKEND_PYTHON, PSYDAC_BACKEND_GPYCCEL,PSYDAC_BACKEND_NUMBA,PSYDAC_BACKEND_PYTHRAN
 
 import time
 from tabulate import tabulate
 from collections import namedtuple
 
-Timing = namedtuple('Timing', ['kind', 'python', 'pyccel'])
+Timing = namedtuple('Timing', ['kind', 'python', 'pyccel', 'numba', 'pythran'])
 
 DEBUG = False
 
@@ -180,11 +180,11 @@ DEBUG = False
 def print_timing(ls):
     # ...
     table   = []
-    headers = ['Assembly time', 'Python', 'Pyccel', 'Speedup']
+    headers = ['Assembly time', 'Python', 'Pyccel', 'Numba', 'Pythran','Speedup']
 
     for timing in ls:
         speedup = timing.python / timing.pyccel
-        line   = [timing.kind, timing.python, timing.pyccel, speedup]
+        line   = [timing.kind, timing.python, timing.pyccel, timing.numba, timing.pythran, speedup]
         table.append(line)
 
     print(tabulate(table, headers=headers, tablefmt='latex'))
@@ -225,6 +225,7 @@ def run_poisson(domain, solution, f, ncells, degree, backend):
     # ... bilinear form
     ah = discretize(a, domain_h, [Vh, Vh], backend=backend)
 
+    ah.assemble();
     tb = time.time(); M = ah.assemble(); te = time.time()
 
     d['matrix'] = te-tb
@@ -232,7 +233,7 @@ def run_poisson(domain, solution, f, ncells, degree, backend):
 
     # ... linear form
     lh = discretize(l, domain_h, Vh, backend=backend)
-
+    lh.assemble();
     tb = time.time(); L = lh.assemble(); te = time.time()
 
     d['rhs'] = te-tb
@@ -243,7 +244,7 @@ def run_poisson(domain, solution, f, ncells, degree, backend):
     phi = FemField( Vh )
 
     l2norm_h = discretize(l2norm, domain_h, Vh, backend=backend)
-
+    err = l2norm_h.assemble(F=phi);
     tb = time.time(); err = l2norm_h.assemble(F=phi); te = time.time()
 
     d['l2norm'] = te-tb
@@ -273,8 +274,19 @@ def test_perf_poisson_2d(ncells=[2**7,2**7], degree=[2,2]):
                          ncells=ncells, degree=degree,
                          backend=PSYDAC_BACKEND_GPYCCEL )
 
+    # using Numba
+    d_nb = run_poisson( domain, solution, f,
+                         ncells=ncells, degree=degree,
+                         backend=PSYDAC_BACKEND_NUMBA )
+
+    # using Pythran
+    d_pythran = run_poisson( domain, solution, f,
+                         ncells=ncells, degree=degree,
+                         backend=PSYDAC_BACKEND_PYTHRAN )
+                                                 
+    
     # ... add every new backend here
-    d_all = [d_py, d_f90]
+    d_all = [d_py, d_f90, d_nb, d_pythran]
 
     keys = sorted(list(d_py.keys()))
     timings = []

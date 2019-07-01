@@ -1089,7 +1089,7 @@ class Kernel(SplBasic):
             func_args = fields_coeffs + vector_fields_coeffs + mapping_coeffs + mats_args
                 
             func_args = self.build_arguments(func_args)
-
+            func_name = self.name+'_'+str(i_row)+str(i_col)
             decorators = {}
             header = None
             if self.backend['name'] == 'pyccel':
@@ -1097,9 +1097,9 @@ class Kernel(SplBasic):
             elif self.backend['name'] == 'numba':
                 decorators = {'jit':[]}
             elif self.backend['name'] == 'pythran':
-                header = build_pythran_types_header(self.name, func_args)
+                header = build_pythran_types_header(func_name, func_args)
             
-            funcs[i_row][i_col] = FunctionDef(self.name+'_'+str(i_row)+str(i_col), list(func_args), [], body,
+            funcs[i_row][i_col] = FunctionDef(func_name, list(func_args), [], body,
                                     decorators=decorators,header=header)
    
         return funcs
@@ -1651,8 +1651,6 @@ class Interface(SplBasic):
 
         obj._dots = [lo_dot, v_dot]
         obj._dependencies += [assembly, lo_dot, v_dot]
-
-        obj._dependencies += [assembly]
 
         obj._func = obj._initialize()
         return obj

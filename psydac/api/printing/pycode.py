@@ -23,6 +23,7 @@ class PythonCodePrinter(PyccelPythonCodePrinter):
         code = ''
         if self._enable_dependencies and expr.dependencies:
             imports = []
+            
             for dep in expr.dependencies:
                 imports +=dep.imports
             code = '\n'.join(self._print(i) for i in imports)
