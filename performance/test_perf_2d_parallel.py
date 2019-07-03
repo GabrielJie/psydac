@@ -356,7 +356,7 @@ def test_perf_poisson_2d_2():
 
     for d in range(2,8):
         d_f90[d] = run_poisson_1( domain, solution, f,
-                         ncells=[2**4*p1, 2**4*p2], degree=[d, d],
+                         ncells=[2**3*p1, 2**3*p2], degree=[d, d],
                          backend=PSYDAC_BACKEND_GPYCCEL,nprocs=[p1,p2] )
     
 

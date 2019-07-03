@@ -312,6 +312,7 @@ def run_poisson_2(domain, solution, f, ncells, degree, backend):
 
 #==============================================================================
 def test_perf_poisson_2d_1():
+    print('************ENTER***********')
     domain = Cube()
     x,y,z = domain.coordinates
 
@@ -320,7 +321,7 @@ def test_perf_poisson_2d_1():
 
     d_f90 = {}
     # using Pyccel
-    for n in range(5,6):
+    for n in range(9,10):
         d_d = {}
         for d in range(2, 8):
             d_d[d] = run_poisson_1( domain, solution, f,
@@ -395,6 +396,7 @@ def test_perf_poisson_2d_3():
 if __name__ == '__main__':
 
     # ... examples without mapping
+    print('begin')
     test_perf_poisson_2d_1()
 #    test_perf_poisson_2d_2()
 #    test_perf_poisson_2d_3()

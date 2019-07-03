@@ -21,13 +21,13 @@ from psydac.fem.basic   import FemField
 from psydac.fem.splines import SplineSpace
 from psydac.fem.tensor  import TensorFemSpace
 from psydac.api.discretization import discretize
-from psydac.api.settings import PSYDAC_BACKEND_PYTHON, PSYDAC_BACKEND_GPYCCEL,PSYDAC_BACKEND_NUMBA,PSYDAC_BACKEND_PYTHRAN
+from psydac.api.settings import PSYDAC_BACKEND_PYTHON, PSYDAC_BACKEND_GPYCCEL,PSYDAC_BACKEND_NUMBA,PSYDAC_BACKEND_PYTHRAN,PSYDAC_BACKEND_IPYCCEL
 
 import time
 from tabulate import tabulate
 from collections import namedtuple
 
-Timing = namedtuple('Timing', ['kind', 'python', 'pyccel', 'numba', 'pythran'])
+Timing = namedtuple('Timing', ['kind', 'python', 'ipyccel','gpyccel', 'numba', 'pythran'])
 
 DEBUG = False
 
@@ -180,11 +180,11 @@ DEBUG = False
 def print_timing(ls):
     # ...
     table   = []
-    headers = ['Assembly time', 'Python', 'Pyccel', 'Numba', 'Pythran','Speedup']
+    headers = ['Assembly time', 'Python', 'IPyccel','GPyccel', 'Numba', 'Pythran','Speedup']
 
     for timing in ls:
-        speedup = timing.python / timing.pyccel
-        line   = [timing.kind, timing.python, timing.pyccel, timing.numba, timing.pythran, speedup]
+        speedup = timing.python / timing.ipyccel
+        line   = [timing.kind, timing.python, timing.ipyccel,timing.gpyccel, timing.numba, timing.pythran, speedup]
         table.append(line)
 
     print(tabulate(table, headers=headers, tablefmt='latex'))
@@ -257,7 +257,7 @@ def run_poisson(domain, solution, f, ncells, degree, backend):
 ###############################################################################
 
 #==============================================================================
-def test_perf_poisson_2d(ncells=[2**7,2**7], degree=[2,2]):
+def test_perf_poisson_2d(ncells=[2**5,2**5], degree=[2,2]):
     domain = Square()
     x,y = domain.coordinates
 
@@ -270,9 +270,14 @@ def test_perf_poisson_2d(ncells=[2**7,2**7], degree=[2,2]):
                         backend=PSYDAC_BACKEND_PYTHON )
 
     # using Pyccel
-    d_f90 = run_poisson( domain, solution, f,
+    d_f190 = run_poisson( domain, solution, f,
                          ncells=ncells, degree=degree,
                          backend=PSYDAC_BACKEND_GPYCCEL )
+
+    # using Pyccel
+    d_f290 = run_poisson( domain, solution, f,
+                         ncells=ncells, degree=degree,
+                         backend=PSYDAC_BACKEND_IPYCCEL )
 
     # using Numba
     d_nb = run_poisson( domain, solution, f,
@@ -286,7 +291,7 @@ def test_perf_poisson_2d(ncells=[2**7,2**7], degree=[2,2]):
                                                  
     
     # ... add every new backend here
-    d_all = [d_py, d_f90, d_nb, d_pythran]
+    d_all = [d_py, d_f290, d_f190 ,d_nb, d_pythran]
 
     keys = sorted(list(d_py.keys()))
     timings = []

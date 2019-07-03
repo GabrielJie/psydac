@@ -21,178 +21,297 @@ from psydac.fem.basic   import FemField
 from psydac.fem.splines import SplineSpace
 from psydac.fem.tensor  import TensorFemSpace
 from psydac.api.discretization import discretize
-from psydac.api.settings import PSYDAC_BACKEND_PYTHON, PSYDAC_BACKEND_GPYCCEL
-
-from numpy import linspace, zeros
-
+from psydac.api.settings import PSYDAC_BACKEND_PYTHON, PSYDAC_BACKEND_GPYCCEL,PSYDAC_BACKEND_NUMBA,PSYDAC_BACKEND_IPYCCEL,PSYDAC_BACKEND_PYTHRAN
 import time
 from tabulate import tabulate
 from collections import namedtuple
 
-Timing = namedtuple('Timing', ['kind', 'python', 'pyccel'])
+Timing = namedtuple('Timing', ['kind', 'pythran', 'ipyccel','gpyccel', 'numba'])
 
-domain = Cube()
+DEBUG = False
 
+#def test_api_vector_poisson_2d():
+#    print('============ test_api_vector_poisson_2d =============')
+#
+#    # ... abstract model
+#    U = VectorFunctionSpace('U', domain)
+#    V = VectorFunctionSpace('V', domain)
+#
+#    x,y = domain.coordinates
+#
+#    F = VectorField(V, name='F')
+#
+#    v = VectorTestFunction(V, name='v')
+#    u = VectorTestFunction(U, name='u')
+#
+#    expr = inner(grad(v), grad(u))
+#    a = BilinearForm((v,u), expr)
+#
+#    f = Tuple(2*pi**2*sin(pi*x)*sin(pi*y), 2*pi**2*sin(pi*x)*sin(pi*y))
+#
+#    expr = dot(f, v)
+#    l = LinearForm(v, expr)
+#
+#    # TODO improve
+#    error = F[0] -sin(pi*x)*sin(pi*y) + F[1] -sin(pi*x)*sin(pi*y)
+#    l2norm = Norm(error, domain, kind='l2', name='u')
+#    # ...
+#
+#    # ... discrete spaces
+##    Vh = create_discrete_space(p=(3,3), ne=(2**8,2**8))
+#    Vh = create_discrete_space(p=(2,2), ne=(2**3,2**3))
+#    Vh = ProductFemSpace(Vh, Vh)
+#    # ...
+#
+#    # ...
+#    ah = discretize(a, [Vh, Vh], backend=PSYDAC_BACKEND_PYCCEL)
+#    tb = time.time()
+#    M_f90 = ah.assemble()
+#    te = time.time()
+#    print('> [pyccel] elapsed time (matrix) = ', te-tb)
+#    t_f90 = te-tb
+#
+#    ah = discretize(a, [Vh, Vh], backend=PSYDAC_BACKEND_PYTHON)
+#    tb = time.time()
+#    M_py = ah.assemble()
+#    te = time.time()
+#    print('> [python] elapsed time (matrix) = ', te-tb)
+#    t_py = te-tb
+#
+#    matrix_timing = Timing('matrix', t_py, t_f90)
+#    # ...
+#
+#    # ...
+#    lh = discretize(l, Vh, backend=PSYDAC_BACKEND_PYCCEL)
+#    tb = time.time()
+#    L_f90 = lh.assemble()
+#    te = time.time()
+#    print('> [pyccel] elapsed time (rhs) = ', te-tb)
+#    t_f90 = te-tb
+#
+#    lh = discretize(l, Vh, backend=PSYDAC_BACKEND_PYTHON)
+#    tb = time.time()
+#    L_py = lh.assemble()
+#    te = time.time()
+#    print('> [python] elapsed time (rhs) = ', te-tb)
+#    t_py = te-tb
+#
+#    rhs_timing = Timing('rhs', t_py, t_f90)
+#    # ...
+#
+#    # ... coeff of phi are 0
+#    phi = VectorFemField( Vh, 'phi' )
+#    # ...
+#
+#    # ...
+#    l2norm_h = discretize(l2norm, Vh, backend=PSYDAC_BACKEND_PYCCEL)
+#    tb = time.time()
+#    L_f90 = l2norm_h.assemble(F=phi)
+#    te = time.time()
+#    t_f90 = te-tb
+#    print('> [pyccel] elapsed time (L2 norm) = ', te-tb)
+#
+#    l2norm_h = discretize(l2norm, Vh, backend=PSYDAC_BACKEND_PYTHON)
+#    tb = time.time()
+#    L_py = l2norm_h.assemble(F=phi)
+#    te = time.time()
+#    print('> [python] elapsed time (L2 norm) = ', te-tb)
+#    t_py = te-tb
+#
+#    l2norm_timing = Timing('l2norm', t_py, t_f90)
+#    # ...
+#
+#    # ...
+#    print_timing([matrix_timing, rhs_timing, l2norm_timing])
+#    # ...
+#
+#def test_api_stokes_2d():
+#    print('============ test_api_stokes_2d =============')
+#
+#    # ... abstract model
+#    V = VectorFunctionSpace('V', domain)
+#    W = FunctionSpace('W', domain)
+#
+#    v = VectorTestFunction(V, name='v')
+#    u = VectorTestFunction(V, name='u')
+#    p = ScalarTestFunction(W, name='p')
+#    q = ScalarTestFunction(W, name='q')
+#
+#    A = BilinearForm((v,u), inner(grad(v), grad(u)), name='A')
+#    B = BilinearForm((v,p), div(v)*p, name='B')
+#    a = BilinearForm(((v,q),(u,p)), A(v,u) - B(v,p) + B(u,q), name='a')
+#    # ...
+#
+#    # ... discrete spaces
+##    Vh = create_discrete_space(p=(3,3), ne=(2**8,2**8))
+#    Vh = create_discrete_space(p=(2,2), ne=(2**3,2**3))
+#
+#    # TODO improve this?
+#    Vh = ProductFemSpace(Vh, Vh, Vh)
+#    # ...
+#
+#    # ...
+#    ah = discretize(a, [Vh, Vh], backend=PSYDAC_BACKEND_PYCCEL)
+#    tb = time.time()
+#    M_f90 = ah.assemble()
+#    te = time.time()
+#    print('> [pyccel] elapsed time (matrix) = ', te-tb)
+#    t_f90 = te-tb
+#
+#    ah = discretize(a, [Vh, Vh], backend=PSYDAC_BACKEND_PYTHON)
+#    tb = time.time()
+#    M_py = ah.assemble()
+#    te = time.time()
+#    print('> [python] elapsed time (matrix) = ', te-tb)
+#    t_py = te-tb
+#
+#    matrix_timing = Timing('matrix', t_py, t_f90)
+#    # ...
+#
+#    # ...
+#    print_timing([matrix_timing])
+##    print_timing([matrix_timing, rhs_timing, l2norm_timing])
+#    # ...
+
+
+
+#==============================================================================
 def print_timing(ls):
     # ...
     table   = []
-    headers = ['Assembly time', 'Python', 'Pyccel', 'Speedup']
+    headers = ['Assembly time', 'Pythran', 'IPyccel', 'GPyccel', 'Numba','Speedup']
 
     for timing in ls:
-        speedup = timing.python / timing.pyccel
-        line   = [timing.kind, timing.python, timing.pyccel, speedup]
+        speedup = timing.pythran / timing.ipyccel
+        line   = [timing.kind, timing.pythran, timing.ipyccel, timing.gpyccel, timing.numba, speedup]
         table.append(line)
 
     print(tabulate(table, headers=headers, tablefmt='latex'))
     # ...
 
-
-def test_api_poisson_3d():
-    print('============ test_api_poisson_3d =============')
+#==============================================================================
+def run_poisson(domain, solution, f, ncells, degree, backend):
 
     # ... abstract model
-    U = FunctionSpace('U', domain)
+    V = FunctionSpace('V', domain)
 
     x,y,z = domain.coordinates
 
-    F = element_of_space(U, 'F')
+    F = element_of_space(V, 'F')
 
-    v = element_of_space(U, 'v')
-    u = element_of_space(U, 'u')
+    v = element_of_space(V, 'v')
+    u = element_of_space(V, 'u')
 
-    expr = dot(grad(v), grad(u))
-    a = BilinearForm((v,u), expr)
+    a = BilinearForm((v,u), dot(grad(v), grad(u)))
+    l = LinearForm(v, f*v)
 
-    expr = 3*pi**2*sin(pi*x)*sin(pi*y)*sin(pi*z)*v
-    l = LinearForm(v, expr)
+    error = F - solution
+    l2norm = Norm(error, domain, kind='l2')
+    h1norm = Norm(error, domain, kind='h1')
+    # ...
 
-    error = F -sin(pi*x)*sin(pi*y)*sin(pi*z)
-    l2norm = Norm(error, domain, kind='l2', name='u')
-    h1norm = Norm(error, domain, kind='h1', name='u')
-    # ...
-    
-    domain_h = discretize(domain, ncells=(2**3, 2**3, 2**3))
+    # ... create the computational domain from a topological domain
+    domain_h = discretize(domain, ncells=ncells)
     # ...
 
     # ... discrete spaces
-    Vh = discretize(V, domain_h, degree=(3, 3, 3))
+    Vh = discretize(V, domain_h, degree=degree)
     # ...
 
-    # ...
-    ah = discretize(a, domain_h, [Vh, Vh], backend=PSYDAC_BACKEND_GPYCCEL)
-    tb = time.time()
-    M_f90 = ah.assemble()
-    te = time.time()
-    print('> [pyccel] elapsed time (matrix) = ', te-tb)
-    t_f90 = te-tb
+    # dict to store timings
+    d = {}
 
-    ah = discretize(a, domain_h, [Vh, Vh], backend=PSYDAC_BACKEND_PYTHON)
-    tb = time.time()
-    M_py = ah.assemble()
-    te = time.time()
-    print('> [python] elapsed time (matrix) = ', te-tb)
-    t_py = te-tb
+    # ... bilinear form
+    ah = discretize(a, domain_h, [Vh, Vh], backend=backend)
+    if backend != PSYDAC_BACKEND_PYTHON:
+        ah.assemble();
+    tb = time.time(); M = ah.assemble(); te = time.time()
 
-    matrix_timing = Timing('matrix', t_py, t_f90)
+    d['matrix'] = te-tb
     # ...
 
+    # ... linear form
+    lh = discretize(l, domain_h, Vh, backend=backend)
+    if backend != PSYDAC_BACKEND_PYTHON:
+        lh.assemble();
+    tb = time.time(); L = lh.assemble(); te = time.time()
+
+    d['rhs'] = te-tb
     # ...
-    lh = discretize(l, domain_h, Vh, backend=PSYDAC_BACKEND_GPYCCEL)
-    tb = time.time()
-    L_f90 = lh.assemble()
-    te = time.time()
-    print('> [pyccel] elapsed time (rhs) = ', te-tb)
-    t_f90 = te-tb
-
-    lh = discretize(l, domain_h, Vh, backend=PSYDAC_BACKEND_PYTHON)
-    tb = time.time()
-    L_py = lh.assemble()
-    te = time.time()
-    print('> [python] elapsed time (rhs) = ', te-tb)
-    t_py = te-tb
-
-    rhs_timing = Timing('rhs', t_py, t_f90)
-    # ...
-
-    # ... coeff of phi are 0
+    # ... norm
+    # coeff of phi are 0
     phi = FemField( Vh )
+
+    l2norm_h = discretize(l2norm, domain_h, Vh, backend=backend)
+    if backend != PSYDAC_BACKEND_PYTHON:    
+        err = l2norm_h.assemble(F=phi);
+    tb = time.time(); err = l2norm_h.assemble(F=phi); te = time.time()
+
+    d['l2norm'] = te-tb
     # ...
+    if backend != PSYDAC_BACKEND_PYTHON:
+        M.dot(L);
+    tb = time.time(); M.dot(L); te = time.time()
+    d['matrix_dot'] = te-tb
+    
+    if backend != PSYDAC_BACKEND_PYTHON:
+        L.dot(L);
+    tb = time.time(); L.dot(L); te = time.time()
+    d['vector_dot'] = te-tb
+    return d
 
+###############################################################################
+#            SERIAL TESTS
+###############################################################################
+
+#==============================================================================
+def test_perf_poisson_2d(ncells=[2**6,2**6,2**6], degree=[2,2,2]):
+    domain = Cube()
+    x,y,z = domain.coordinates
+
+    solution = sin(pi*x)*sin(pi*y)*sin(pi*z)
+    f        = 3*pi**2*sin(pi*x)*sin(pi*y)*sin(pi*z)
+
+    # using Python
+    d_py = run_poisson( domain, solution, f,
+                        ncells=ncells, degree=degree,
+                        backend=PSYDAC_BACKEND_PYTHRAN )
+
+
+    # using Pyccel
+    d_f90 = run_poisson( domain, solution, f,
+                         ncells=ncells, degree=degree,
+                         backend=PSYDAC_BACKEND_IPYCCEL )
+
+    # using Numba
+    d_nb = run_poisson( domain, solution, f,
+                         ncells=ncells, degree=degree,
+                         backend=PSYDAC_BACKEND_NUMBA )
+
+    # using Pythran
+    d_f902 = run_poisson( domain, solution, f,
+                         ncells=ncells, degree=degree,
+                         backend=PSYDAC_BACKEND_GPYCCEL )
+                                                 
+    
+    # ... add every new backend here
+    d_all = [d_py, d_f90, d_f902, d_nb]
+
+    keys = sorted(list(d_py.keys()))
+    timings = []
+    for key in keys:
+        args = [d[key] for d in d_all]
+        timing = Timing(key, *args)
+        timings += [timing]
+
+    print_timing(timings)
     # ...
-    l2norm_h = discretize(l2norm, domain_h, Vh, backend=PSYDAC_BACKEND_GPYCCEL)
-    tb = time.time()
-    L_f90 = l2norm_h.assemble(F=phi)
-    te = time.time()
-    print('> [pyccel] elapsed time (L2 norm) = ', te-tb)
-    t_f90 = te-tb
-
-    l2norm_h = discretize(l2norm, domain_h, Vh, backend=PSYDAC_BACKEND_PYTHON)
-    tb = time.time()
-    L_py = l2norm_h.assemble(F=phi)
-    te = time.time()
-    print('> [python] elapsed time (L2 norm) = ', te-tb)
-    t_py = te-tb
-
-    l2norm_timing = Timing('l2norm', t_py, t_f90)
-    # ...
-
-    # ...
-    print_timing([matrix_timing, rhs_timing, l2norm_timing])
-    # ...
-
-def test_api_stokes_3d():
-    print('============ test_api_stokes_3d =============')
-
-    # ... abstract model
-    U = VectorFunctionSpace('V', domain)
-    V = FunctionSpace('W', domain)
-
-    W = U*V
-
-    v = element_of_space(U, 'v')
-    u = element_of_space(U, 'u')
-    p = element_of_space(V, 'p')
-    q = element_of_space(V, 'q')
-
-    A = BilinearForm((v,u), inner(grad(v), grad(u)))
-    B = BilinearForm((v,p), div(v)*p)
-    a = BilinearForm(((v,q),(u,p)), A(v,u) - B(v,p) + B(u,q))
-    # ...
-
-    domain_h = discretize(domain, ncells=(2**3, 2**3, 2**3))
-    # ...
-
-    # ... discrete spaces
-    Vh = discretize(W, domain_h, degree=(3, 3, 3))
-    # ...
-
-    # ...
-    ah = discretize(a, domain_h, [Vh, Vh], backend=PSYDAC_BACKEND_GPYCCEL)
-    tb = time.time()
-    M_f90 = ah.assemble()
-    te = time.time()
-    print('> [pyccel] elapsed time (matrix) = ', te-tb)
-    t_f90 = te-tb
-
-    ah = discretize(a, domain_h, [Vh, Vh], backend=PSYDAC_BACKEND_PYTHON)
-    tb = time.time()
-    M_py = ah.assemble()
-    te = time.time()
-    print('> [python] elapsed time (matrix) = ', te-tb)
-    t_py = te-tb
-
-    matrix_timing = Timing('matrix', t_py, t_f90)
-    # ...
-
-    # ...
-    print_timing([matrix_timing])
-#    print_timing([matrix_timing, rhs_timing, l2norm_timing])
-    # ...
-
 
 ###############################################
 if __name__ == '__main__':
 
-#    test_api_poisson_3d()
-    test_api_stokes_3d()
-
+    # ... examples without mapping
+    test_perf_poisson_2d()
+#    test_api_vector_poisson_2d()
+#    test_api_stokes_2d()
+    # ...
