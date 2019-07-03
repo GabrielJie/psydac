@@ -135,12 +135,18 @@ class LinearOperatorDot(SplBasic):
         v3 = out[tuple(i+j for i,j in zip(indices1,pads))]
 
         body = [AugAssign(v,'+' ,Mul(v1,v2))]
-        body = [For(indices2, target, body)]
+        for i in range(len(ranges)):
+            body = [For([indices2[i]],ranges[i],body)]
+
+        #body = [For(indices2, target, body)]
         body.insert(0,Assign(v, 0.0))
         body.append(Assign(v3,v))
         ranges = [Range(i) for i in nrows]
-        target = Product(*ranges)
-        body = [For(indices1,target,body)]
+        
+        for i in range(len(ranges)):
+            body = [For([indices1[i]],ranges[i],body)]
+        #target = Product(*ranges)
+        #body = [For(indices1,target,body)]
 
         for dim in range(ndim):
             body.append(Assign(ex,nrows_extra[dim]))
@@ -160,16 +166,22 @@ class LinearOperatorDot(SplBasic):
             ranges = [2*p+1 for p in pads]
             ranges[dim] -= indices1[dim] + 1
             ranges =[Range(i) for i in ranges]
-            target = Product(*ranges)
+            #target = Product(*ranges)
 
             for_body = [AugAssign(v, '+',Mul(v1,v2))]
-            for_body = [For(indices2, target, for_body)]
+            for i in range(len(ranges)):
+                for_body = [For([indices2[i]],ranges[i],for_body)]
+
+            #for_body = [For(indices2, target, for_body)]
             for_body.insert(0,Assign(v, 0.0))
             for_body.append(Assign(v3,v))
 
             ranges = [Range(i) for i in rows]
-            target = Product(*ranges)
-            body += [For(indices1, target, for_body)]
+            #target = Product(*ranges)
+            for i in range(len(ranges)):
+                for_body = [For([indices1[i]],ranges[i],for_body)]
+
+            body += for_body
 
         
         body = init_body + body
@@ -239,7 +251,10 @@ class VectorDot(SplBasic):
         v2 = x2[indices]
         
         body = [AugAssign(out,'+' ,Mul(v1,v2))]
-        body = [For(indices, target, body)]
+        for i in range(len(ranges)):
+            body = [For([indices[i]],ranges[i],body)]
+
+        #body = [For(indices, target, body)]
         body.insert(0,Assign(out, 0.0))
         body.append(Return(out))
 

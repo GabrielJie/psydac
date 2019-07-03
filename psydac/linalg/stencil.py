@@ -208,7 +208,7 @@ class StencilVector( Vector ):
 
         assert isinstance( v, StencilVector )
         assert v._space is self._space
-        res = self._dot(self._data, v._data , self.pads, self._data.shape)
+        res = self._dot(self._data, v._data , np.array(self.pads), np.array(self._data.shape))
         if self._space.parallel:
             res = self._space.cart.comm_cart.allreduce( res, op=MPI.SUM )
 
@@ -591,7 +591,7 @@ class StencilMatrix( Matrix ):
         nrows       = [ed-s+1 for s,ed in zip(ssd, eed)]
         nrows_extra = [0 if ec<=ed else ec-ed for ec,ed in zip(eec,eed)]
 
-        self._dot(self._data, v._data, out._data, nrows, nrows_extra, pp)
+        self._dot(self._data, v._data, out._data, np.array(nrows),np.array( nrows_extra), np.array(pp))
 
         # IMPORTANT: flag that ghost regions are not up-to-date
         out.ghost_regions_in_sync = False
