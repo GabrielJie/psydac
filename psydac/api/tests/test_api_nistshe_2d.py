@@ -21,7 +21,6 @@ from sympde.expr import find, EssentialBC
 from psydac.fem.basic   import FemField
 from psydac.api.discretization import discretize
 from psydac.api.settings import *
-from psydac.linalg.utilities   import array_to_stencil
 from numpy import linspace, zeros, allclose
 from mpi4py import MPI
 import pytest
