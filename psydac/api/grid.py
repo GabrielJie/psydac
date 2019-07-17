@@ -10,6 +10,7 @@ from psydac.fem.splines            import SplineSpace
 from psydac.fem.tensor             import TensorFemSpace
 from psydac.fem.vector             import ProductFemSpace
 from psydac.fem.grid               import FemAssemblyGrid
+from psydac.core.bsplines          import basis_ders_on_quad_grid
 
 #==============================================================================
 def _compute_quadrature_SplineSpace( V, quad_order=None ):
@@ -161,6 +162,9 @@ class BoundaryQuadratureGrid(QuadratureGrid):
         assert( not( isinstance(V, ProductFemSpace) ) )
 
         QuadratureGrid.__init__( self, V, quad_order=quad_order )
+        
+        self._axis = axis
+        self._ext  = ext
 
         points     = self.points
         weights    = self.weights
@@ -189,6 +193,14 @@ class BoundaryQuadratureGrid(QuadratureGrid):
 
         self._points     = points
         self._weights    = weights
+    
+    @property
+    def axis(self):
+        return self._axis
+        
+    @property
+    def ext(self):
+        return self._ext
 
 
 #==============================================================================
@@ -240,9 +252,21 @@ class BasisValues():
         if isinstance(V, ProductFemSpace):
             self._spans = [[g.spans for g in quad_grid] for quad_grid in global_quad_grid]
             self._basis = [[g.basis for g in quad_grid] for quad_grid in global_quad_grid]
+            if isinstance(grid, BoundaryQuadratureGrid):
+                quad_order = np.array([v.degree for v in V.spaces])
+                quad_order = tuple(quad_order.max(axis=0))
+                
         else:
             self._spans = [g.spans for g in global_quad_grid]
             self._basis = [g.basis for g in global_quad_grid]
+            if isinstance(grid, BoundaryQuadratureGrid):
+                axis = grid.axis
+                ext  = grid.ext
+                space = V.spaces[axis]
+                points = grid.points[axis]
+                boundaray_basis = basis_ders_on_quad_grid(space.knots, space.degree, points, nderiv)
+                self._basis[axis][0:1,:,:,0:1] = boundaray_basis
+                
             
     @property
     def basis(self):
