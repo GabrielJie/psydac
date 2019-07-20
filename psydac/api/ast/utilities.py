@@ -544,8 +544,8 @@ def compute_normal_vector(vector, discrete_boundary, mapping):
 
     else:
         M = mapping
-        inv_jac = Symbol('inv_jac')
-        det_jac = Symbol('det_jac')
+        inv_jac_bnd = Symbol('inv_jac_bnd')
+        det_jac_bnd = Symbol('det_jac_bnd')
 
         # ... construct jacobian on manifold
         lines = []
@@ -573,7 +573,7 @@ def compute_normal_vector(vector, discrete_boundary, mapping):
             # Fortran between sqrt and Pow(, 1/2)?
             j = (sum(J[i]**2 for i in range(0, dim)))**(1/2)
 
-            values = [inv_jac*J[1], -inv_jac*J[0]]
+            values = [inv_jac_bnd*J[1], -inv_jac_bnd*J[0]]
 
         elif dim == 3:
 
@@ -582,14 +582,14 @@ def compute_normal_vector(vector, discrete_boundary, mapping):
 
             values = Cross_3d(x_s, x_t)
             j = (sum(J[i]**2 for i in range(0, dim)))**(1/2)
-            values = [inv_jac*v for v in values]
+            values = [inv_jac_bnd*v for v in values]
 
 
         # change the orientation
         values = [ext*i for i in values]
 
-        map_stmts += [Assign(det_jac, j)]
-        map_stmts += [Assign(inv_jac, 1./j)]
+        map_stmts += [Assign(det_jac_bnd, j)]
+        map_stmts += [Assign(inv_jac_bnd, 1./j)]
 
     for i in range(0, dim):
         body += [Assign(vector[i], values[i])]

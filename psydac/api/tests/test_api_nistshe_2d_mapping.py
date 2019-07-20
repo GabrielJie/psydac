@@ -110,7 +110,8 @@ def run_laplace_2d_nitsche_dir(filename, solution, f, s, kappa, comm=None):
    
     return l2_error, h1_error
     
-def test_api_laplace_2d_nitsche_dir():
+def test_api_laplace_2d_nitsche_dir_1():
+
     filename = os.path.join(mesh_dir, 'identity_2d.h5')
     #filename = os.path.join(mesh_dir, 'collela_2d.h5')
     from sympy.abc import x,y
@@ -120,17 +121,67 @@ def test_api_laplace_2d_nitsche_dir():
 
     
     l2_error, h1_error = run_laplace_2d_nitsche_dir(filename, solution, f, s=1, kappa=10**20)
- 
-    print(l2_error, h1_error)
-    expected_l2_error =  0.00037843634364452175
-    expected_h1_error =  0.02192134807021331
+     
+
+    expected_l2_error =  0.00015446936830728803
+    expected_h1_error =  0.009276141176125671
 
     assert( abs(l2_error - expected_l2_error) < 1.e-7)
     assert( abs(h1_error - expected_h1_error) < 1.e-7)
 
-test_api_laplace_2d_nitsche_dir()
+def test_api_laplace_2d_nitsche_dir_2():
 
+    filename = os.path.join(mesh_dir, 'collela_2d.h5')
+    from sympy.abc import x,y
 
+    solution = cos(0.5*pi*x)*sin(pi*y)
+    f        = (5./4.)*pi**2*solution
+
+    
+    l2_error, h1_error = run_laplace_2d_nitsche_dir(filename, solution, f, s=1, kappa=10**10)
+     
+    expected_l2_error =  0.01660877902787216 
+    expected_h1_error =  0.23425587117811927
+
+    assert( abs(l2_error - expected_l2_error) < 1.e-7)
+    assert( abs(h1_error - expected_h1_error) < 1.e-7)
+
+def test_api_laplace_2d_nitsche_dir_3():
+
+    filename = os.path.join(mesh_dir, 'quart_circle.h5')
+
+    from sympy.abc import x,y
+
+    solution = cos(0.5*pi*x)*sin(pi*y) + x**2*y**2
+    f        = (5./4.)*pi**2*cos(0.5*pi*x)*sin(pi*y) - 2*y**2 - 2*x**2
+
+    
+    l2_error, h1_error = run_laplace_2d_nitsche_dir(filename, solution, f, s=1, kappa=10**10)
+     
+    expected_l2_error =  0.00015095253299238613
+    expected_h1_error =  0.005572269506680323
+
+    assert( abs(l2_error - expected_l2_error) < 1.e-7)
+    assert( abs(h1_error - expected_h1_error) < 1.e-7)
+    
+    
+def test_api_laplace_2d_nitsche_dir_4():
+
+    filename = os.path.join(mesh_dir, 'annulus.h5')
+
+    from sympy.abc import x,y
+
+    solution = cos(0.5*pi*x)*sin(pi*y) + x**2*y**2
+    f        = (5./4.)*pi**2*cos(0.5*pi*x)*sin(pi*y) - 2*y**2 - 2*x**2
+
+    
+    l2_error, h1_error = run_laplace_2d_nitsche_dir(filename, solution, f, s=1, kappa=10**5)
+
+    expected_l2_error =  0.08030849457794145
+    expected_h1_error =  0.5641745896615159
+
+    assert( abs(l2_error - expected_l2_error) < 1.e-7)
+    assert( abs(h1_error - expected_h1_error) < 1.e-7)
 #==============================================================================
 # CLEAN UP SYMPY NAMESPACE
 #==============================================================================
@@ -142,3 +193,4 @@ def teardown_module():
 def teardown_function():
     from sympy import cache
     cache.clear_cache()
+

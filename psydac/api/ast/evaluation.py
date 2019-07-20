@@ -68,7 +68,7 @@ from psydac.fem.vector  import ProductFemSpace
 
 from .basic import SplBasic
 from .utilities import build_pythran_types_header, variables
-from .utilities import filter_loops, filter_product
+from .utilities import filter_loops, filter_product, select_loops
 from .utilities import rationalize_eval_mapping
 from .utilities import compute_atoms_expr_mapping
 from .utilities import compute_atoms_expr_vector_field
@@ -288,9 +288,7 @@ class EvalQuadratureMapping(SplBasic):
         # ...
 
         # put the body in tests for loops
-        body = filter_loops(indices_basis, ranges_basis, body,
-                            self.discrete_boundary,
-                            boundary_basis=self.boundary_basis)
+        body = select_loops(indices_basis, ranges_basis, body, discrete_boundary=None)
 
         if self.is_rational_mapping:
             stmts = rationalize_eval_mapping(self.mapping, self.nderiv,
@@ -335,6 +333,7 @@ class EvalQuadratureMapping(SplBasic):
         elif self.backend['name'] == 'pythran':
             header = build_pythran_types_header(self.name, func_args)
 
+        
         return FunctionDef(self.name, list(func_args), [], body,
                            decorators=decorators,header=header)
 
