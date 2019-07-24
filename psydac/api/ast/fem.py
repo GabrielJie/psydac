@@ -155,6 +155,7 @@ def init_loop_support(indices_elm, n_elements,
     quad_ext  = [i[1] for i in discrete_boundary]
 
     dim = len(indices_elm)
+    ln  = len(test_basis_in_elm)//dim
     for i in range(dim-1,-1,-1):
         rx = ranges[i]
         x = indices_elm[i]
@@ -179,8 +180,9 @@ def init_loop_support(indices_elm, n_elements,
     # ...
 
     # ... assign span index
-    i_span = indices_span[axis]
-    stmts += [Assign(i_span, spans[axis][ie])]
+    for i in range(ln):
+        i_span = indices_span[axis*ln + i]
+        stmts += [Assign(i_span, spans[axis*ln + i][ie])]
     # ...
 
     # ... assign points, weights and basis
@@ -190,12 +192,11 @@ def init_loop_support(indices_elm, n_elements,
 
     stmts += [Assign(points_in_elm[axis], points[axis][0,_slice])]
     stmts += [Assign(weights_in_elm[axis], weights[axis][0,_slice])]
-    stmts += [Assign(test_basis_in_elm[axis], test_basis[axis][0,_slice,_slice,_slice])]
+    stmts += [Assign(test_basis_in_elm[::ln][axis], test_basis[::ln][axis][0,_slice,_slice,_slice])]
 
     if is_bilinear:
-        stmts += [Assign(trial_basis_in_elm[axis], trial_basis[axis][0,_slice,_slice,_slice])]
+        stmts += [Assign(trial_basis_in_elm[::ln][axis], trial_basis[::ln][axis][0,_slice,_slice,_slice])]
     # ...
-
     return stmts
 
 #==============================================================================

@@ -159,7 +159,11 @@ class QuadratureGrid():
 #==============================================================================
 class BoundaryQuadratureGrid(QuadratureGrid):
     def __init__( self, V, axis, ext, quad_order=None ):
-        assert( not( isinstance(V, ProductFemSpace) ) )
+
+        if isinstance(V, ProductFemSpace):
+            quad_order = np.array([v.degree for v in V.spaces])
+            quad_order = tuple(quad_order.max(axis=0))
+            V = V.spaces[0]
 
         QuadratureGrid.__init__( self, V, quad_order=quad_order )
         
@@ -190,7 +194,6 @@ class BoundaryQuadratureGrid(QuadratureGrid):
             points[axis]     = np.asarray([[bounds[ext]]])
             weights[axis]    = np.asarray([[1.]])
         # ...
-
         self._points     = points
         self._weights    = weights
     
@@ -253,9 +256,13 @@ class BasisValues():
             self._spans = [[g.spans for g in quad_grid] for quad_grid in global_quad_grid]
             self._basis = [[g.basis for g in quad_grid] for quad_grid in global_quad_grid]
             if isinstance(grid, BoundaryQuadratureGrid):
-                quad_order = np.array([v.degree for v in V.spaces])
-                quad_order = tuple(quad_order.max(axis=0))
-                
+                axis = grid.axis
+                ext  = grid.ext
+                for i in range(len(self._basis)):
+                    space = V.spaces[i].spaces[axis]
+                    points = grid.points[axis]
+                    boundaray_basis = basis_ders_on_quad_grid(space.knots, space.degree, points, nderiv)
+                    self._basis[i][axis][0:1,:,:,0:1] = boundaray_basis
         else:
             self._spans = [g.spans for g in global_quad_grid]
             self._basis = [g.basis for g in global_quad_grid]
@@ -267,7 +274,6 @@ class BasisValues():
                 boundaray_basis = basis_ders_on_quad_grid(space.knots, space.degree, points, nderiv)
                 self._basis[axis][0:1,:,:,0:1] = boundaray_basis
                 
-            
     @property
     def basis(self):
         return self._basis

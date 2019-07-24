@@ -32,6 +32,7 @@ from psydac.api.ast.glt         import GltInterface
 from psydac.api.glt             import DiscreteGltExpr
 
 from psydac.linalg.stencil      import StencilVector, StencilMatrix
+from psydac.linalg.block        import BlockVector, BlockLinearOperator
 from psydac.cad.geometry        import Geometry
 from psydac.mapping.discrete    import SplineMapping, NurbsMapping
 from psydac.fem.vector          import ProductFemSpace
@@ -141,7 +142,6 @@ class DiscreteLinearForm(BasicDiscrete):
 
         mapping = list(domain_h.mappings.values())[0]
         self._mapping = mapping
-
         is_rational_mapping = False
         if not( mapping is None ):
             is_rational_mapping = isinstance( mapping, NurbsMapping )
@@ -175,11 +175,13 @@ class DiscreteLinearForm(BasicDiscrete):
                                                  boundary.axis,
                                                  boundary.ext,
                                                  quad_order = quad_order )
+
         # ...
 
         # ...
         self._test_basis = BasisValues( self.space, self.grid,
                                         nderiv = self.max_nderiv )
+
 
         # ...
 
@@ -196,8 +198,7 @@ class DiscreteLinearForm(BasicDiscrete):
         return self._test_basis
 
     def assemble(self, **kwargs):
-        newargs = (self.space, self.grid, self.test_basis)
-        
+        newargs = (self.space, self.grid, self.test_basis)       
         if self.mapping:
             newargs = newargs + (self.mapping,)
 
@@ -356,25 +357,28 @@ class DiscreteSumForm(BasicDiscrete):
     def assemble(self, **kwargs):
         form = self.forms[0]
         M = form.assemble(**kwargs)
-        if isinstance(M, (StencilVector, StencilMatrix)):
-            M = [M]
 
         for form in self.forms[1:]:
+            
+            if isinstance(M, (StencilVector, StencilMatrix)):
+                M = [M]
+            elif isinstance(M, BlockVector):
+                M = list(M.blocks)
+            elif isinstance(M, BlockLinearOperator):
+                M = [e for row in M.blocks for e in row  if e is not None]
+                
             n = len(form.interface.inout_arguments)
-            # add arguments
+            # add arguments                
             for i in range(0, n):
                 key = str(form.interface.inout_arguments[i])
                 kwargs[key] = M[i]
 
             M = form.assemble(**kwargs)
-            if isinstance(M, (StencilVector, StencilMatrix)):
-                M = [M]
 
+                
             # remove arguments
             for i in range(0, n):
                 key = str(form.interface.inout_arguments[i])
                 kwargs.pop(key)
-
-        if len(M) == 1: M = M[0]
 
         return M
