@@ -11,12 +11,13 @@ from sympde.topology import FunctionSpace, VectorFunctionSpace
 from sympde.topology import ProductSpace
 from sympde.topology import element_of_space
 from sympde.topology import Boundary, NormalVector, TangentVector
-from sympde.topology import Domain, Line, Square, Cube
+from sympde.topology import Domain, Line, Square, Cube, two_patches_Square
 from sympde.topology import Trace, trace_0, trace_1
 from sympde.topology import Union
 from sympde.expr import BilinearForm, LinearForm
 from sympde.expr import Norm
 from sympde.expr import find, EssentialBC
+from sympde.expr.evaluation import TerminalExpr
 
 from psydac.fem.basic   import FemField
 from psydac.api.discretization import discretize
@@ -34,7 +35,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from matplotlib import animation
 
-kwargs = {'settings':{'solver':'cg', 'tol':1e-9, 'maxiter':10000, 'verbose':False}}
+kwargs = {'settings':{'solver':'cg', 'tol':1e-9, 'maxiter':1000, 'verbose':False}}
 #==============================================================================
 def run_laplace_2d_nitsche_dir(solution, f, ncells, degree, s, kappa, comm=None):
 
@@ -121,7 +122,7 @@ def run_maxwell_2d_nitsche_dir(solution, f, ncells, degree, s, kappa, mu, comm=N
 
     B = domain.boundary
 
-    V = VectorFunctionSpace('V', domain,kind='H1')
+    V = VectorFunctionSpace('V', domain,kind='hcurl')
     
     nn = NormalVector('nn')
 
@@ -159,7 +160,7 @@ def run_maxwell_2d_nitsche_dir(solution, f, ncells, degree, s, kappa, mu, comm=N
 
 
     # ... dsicretize the equation using Dirichlet bc
-    equation_h = discretize(equation, domain_h, [Vh, Vh])
+    equation_h = discretize(equation, domain_h, [Vh, Vh],symbolic_space=[V,V])
     # ...
 
     # ... discretize norms
@@ -186,8 +187,134 @@ def run_maxwell_2d_nitsche_dir(solution, f, ncells, degree, s, kappa, mu, comm=N
     return l2_error, h1_error
 
 
+#==============================================================================
+def run_laplace_2d_2_patchs_nitsche_dir(solution, f1, f2, ncells, degree, kappa, comm=None):
 
-  
+    # ... abstract model
+    domain  = two_patches_Square()
+    domain1 = domain.interior.args[0]
+    domain2 = domain.interior.args[1]
+
+    V1 = FunctionSpace('V1', domain1)
+    V2 = FunctionSpace('V2', domain2)
+
+    B = domain.connectivity
+
+    v1 = element_of_space(V1, name='v1')
+    u1 = element_of_space(V1, name='u1')
+
+    v2 = element_of_space(V2, name='v2')
+    u2 = element_of_space(V2, name='u2')
+
+    a0  = BilinearForm(((u1,u2),(v1,v2)), dot(grad(v1),grad(u1)) + dot(grad(v2),grad(u2)))
+
+    a_B = BilinearForm(((u1,u2),(v1,v2)),\
+                                -0.5*trace_0(u1, B) * trace_1(grad(v1), B)\
+                                +0.5*trace_0(u2, B) * trace_1(grad(v2), B)\
+                                +0.5*trace_0(u2, B) * trace_1(grad(v1), B)\
+                                -0.5*trace_0(u1, B) * trace_1(grad(v2), B)\
+                                
+                                -0.5*trace_0(v1, B) * trace_1(grad(u1), B)\
+                                +0.5*trace_0(v2, B) * trace_1(grad(u2), B)\
+                                +0.5*trace_0(v2, B) * trace_1(grad(u1), B)\
+                                -0.5*trace_0(v1, B) * trace_1(grad(u2), B)\
+                                
+                              +kappa*trace_0(u1, B) * trace_0(v1, B)\
+                              +kappa*trace_0(u2, B) * trace_0(v2, B)\
+                              -kappa*trace_0(u1, B) * trace_0(v2, B)\
+                              -kappa*trace_0(u2, B) * trace_0(v1, B)\
+                                
+                            #        -trace_0(u1, B.complement(B1)) * trace_1(grad(v1), B.complement(B1))\
+                            #        -trace_0(u2, B.complement(B2)) * trace_1(grad(v2), B.complement(B2))\
+                                
+                            #        -trace_0(v1, B.complement(B1)) * trace_1(grad(u1), B.complement(B1))\
+                            #        -trace_0(v2, B.complement(B2)) * trace_1(grad(u2), B.complement(B2))\
+                               
+                            #  +kappa*trace_0(u1, B.complement(B1)) * trace_0(v1, B.complement(B1))\
+                            #  +kappa*trace_0(u2, B.complement(B2)) * trace_0(v2, B.complement(B2))\
+                                
+                                    )
+                            
+    
+    
+    a = BilinearForm(((u1,u2),(v1,v2)), 
+                                       #a0((u1,u2),(v1,v2))\
+                                       a_B((u1,u2),(v1,v2))\
+                                      )
+
+    l0  = LinearForm((v1,v2), f1*v1+ f2*v2)
+    
+    l   = LinearForm((v1,v2), l0(v1,v2))
+
+    #bc1 = EssentialBC(u1, 0, domain1.boundary.complement(B1))
+    #bc2 = EssentialBC(u2, 0, domain2.boundary.complement(B2))
+    
+    equation = find((u1,u2), forall=(v1,v2), lhs=a((u1,u2),(v1,v2)), rhs=l(v1,v2))
+    # ...
+    
+    # ... create the computational domain from a topological domain
+    domain_h1 = discretize(domain1, ncells=[ncells[0]//2,ncells[1]], comm=comm)
+    domain_h2 = discretize(domain2, ncells=[ncells[0]//2,ncells[1]], comm=comm)
+    # ...
+
+    # ... discrete spaces
+    Vh1 = discretize(V1, domain_h1, degree=degree,xmax=[0.5, 1.])
+    Vh2 = discretize(V2, domain_h2, degree=degree,xmin=[0.5, 0.])
+    # ...
+    S = Vh1*Vh2
+    
+    # ... dsicretize the equation using Dirichlet bc
+    equation_h = discretize(equation, domain_h1, [S, S])
+    
+    equation_h.assemble()
+    
+    lhs = equation_h.linear_system.lhs.tosparse().tocsr()
+    rhs = equation_h.linear_system.rhs.toarray()
+
+    x = spsolve(lhs, rhs)
+    
+    x = array_to_stencil(x, S.vector_space)
+    # ...
+
+    # ...
+    phi1 = FemField( Vh1, x[0] )
+    phi2 = FemField( Vh2, x[1] )
+    # ...
+    
+    k1, k2 = np.pi,np.pi
+    model = lambda x,y:x**2*y**2
+    
+    # ...
+    fig, axs   = plt.subplots(1,2, sharey=True)
+    fig2, axs2 = plt.subplots(1,2, sharey=True)
+
+    x1      = list(np.linspace( 0., 0.5, 101 ))
+    x2      = list(np.linspace( 0.5, 1., 101 ))
+    y       = np.linspace( 0., 1., 101 )
+
+    phi1    = np.array( [[phi1(xi, yj) for xi in x1] for yj in y] )
+    phi2    = np.array( [[phi2(xi, yj) for xi in x2] for yj in y] )
+    
+    X1, Y = np.meshgrid(x1, y)
+    X2, Y = np.meshgrid(x2, y)
+    
+    axs[0].contourf(X1, Y, phi1)   
+    cp = axs[1].contourf(X2, Y, phi2)
+    
+    fig.colorbar(cp)
+    
+    axs2[0].contourf(X1, Y, model(X1, Y))   
+    cp2 = axs2[1].contourf(X2, Y, model(X2, Y)) 
+    
+    fig2.colorbar(cp2)
+    
+    plt.show()
+    
+
+#==========================================================================================
+#==========================================================================================
+#==========================================================================================
+
 def test_api_laplace_2d_nitsche_dir():
 
     from sympy.abc import x,y
@@ -232,6 +359,16 @@ def test_api_maxwell_2d_nitsche_dir():
     assert( abs(l2_error - expected_l2_error) < 1.e-7)
     assert( abs(h1_error - expected_h1_error) < 1.e-7)
 
+def test_api_2_patchs_2d_nitsche_dir():
+
+    from sympy.abc import x,y
+    
+    solution = x**2*y**2
+    f1       = 2*(x**2 + y**2)
+    
+    run_laplace_2d_2_patchs_nitsche_dir(solution, f1, f1, ncells=[2**3,2**3], 
+                                                    degree=[2,2], kappa=10**10)
+
 #==============================================================================
 # CLEAN UP SYMPY NAMESPACE
 #==============================================================================
@@ -243,4 +380,7 @@ def teardown_module():
 def teardown_function():
     from sympy import cache
     cache.clear_cache()
+    
+teardown_function()
+test_api_2_patchs_2d_nitsche_dir()
 

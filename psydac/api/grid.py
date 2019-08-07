@@ -190,7 +190,7 @@ class BoundaryQuadratureGrid(QuadratureGrid):
             bounds = {}
             bounds[-1] = V.spaces[axis].domain[0]
             bounds[1]  = V.spaces[axis].domain[1]
-
+            print(bounds)
             points[axis]     = np.asarray([[bounds[ext]]])
             weights[axis]    = np.asarray([[1.]])
         # ...
@@ -242,38 +242,36 @@ def create_fem_assembly_grid(V, quad_order=None, nderiv=1):
 
 #==============================================================================
 class BasisValues():
-    def __init__( self, V, grid, nderiv ):
-        assert( isinstance( grid, QuadratureGrid ) )
+    def __init__( self, V, grids, nderiv ):
+        assert( isinstance( grids, (list,tuple) ) )
+        for grid in grids:
+            assert isinstance(grid, QuadratureGrid)
 
+        assert len(V) == len(grids)
+
+            
+        self._spans = []
+        self._basis = []
         # TODO quad_order in FemAssemblyGrid must be be the order and not the
         # degree
-        quad_order = [q-1 for q in grid.quad_order]
-        global_quad_grid = create_fem_assembly_grid( V,
-                                              quad_order=quad_order,
-                                              nderiv=nderiv )
+        
+        for grid,space in zip(grids, V):
+            quad_order = [q-1 for q in grid.quad_order]
+        
+            quad_grid = create_fem_assembly_grid( space,
+                        quad_order=quad_order,nderiv=nderiv )
 
-        if isinstance(V, ProductFemSpace):
-            self._spans = [[g.spans for g in quad_grid] for quad_grid in global_quad_grid]
-            self._basis = [[g.basis for g in quad_grid] for quad_grid in global_quad_grid]
+            self._spans += [[g.spans for g in quad_grid]]
+            self._basis += [[g.basis for g in quad_grid]] 
+            
             if isinstance(grid, BoundaryQuadratureGrid):
                 axis = grid.axis
                 ext  = grid.ext
-                for i in range(len(self._basis)):
-                    space = V.spaces[i].spaces[axis]
-                    points = grid.points[axis]
-                    boundaray_basis = basis_ders_on_quad_grid(space.knots, space.degree, points, nderiv)
-                    self._basis[i][axis][0:1,:,:,0:1] = boundaray_basis
-        else:
-            self._spans = [g.spans for g in global_quad_grid]
-            self._basis = [g.basis for g in global_quad_grid]
-            if isinstance(grid, BoundaryQuadratureGrid):
-                axis = grid.axis
-                ext  = grid.ext
-                space = V.spaces[axis]
+                sp_space = space.spaces[axis]
                 points = grid.points[axis]
-                boundaray_basis = basis_ders_on_quad_grid(space.knots, space.degree, points, nderiv)
-                self._basis[axis][0:1,:,:,0:1] = boundaray_basis
-                
+                boundaray_basis = basis_ders_on_quad_grid(sp_space.knots, sp_space.degree, points, nderiv)
+                self._basis[-1][axis][0:1,:,:,0:1] = boundaray_basis
+            
     @property
     def basis(self):
         return self._basis

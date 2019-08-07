@@ -353,6 +353,11 @@ class TensorFemSpace( FemSpace ):
 
         """
         return self._element_starts, self._element_ends
+        
+    @property
+    def global_domain(self):
+        " logical domain [ai, bi]**dim "
+        return tuple(space.domain for space in self.spaces)
 
     @property
     def global_element_starts( self ):

@@ -55,6 +55,64 @@ class FemSpace( metaclass=ABCMeta ):
     def vector_space( self ):
         """Topologically associated vector space."""
 
+    def __mul__( self, space):
+        #TODO improve
+        spaces = []
+        unique_grid = True
+        
+        if isinstance(self, ProductFemSpace):
+            spaces += self.spaces
+        else:
+            spaces.append(self)
+
+        if isinstance(space, ProductFemSpace):
+            spaces += space.spaces
+        else:
+            spaces.append(space)
+
+        Vh = ProductFemSpace(*spaces)
+        V  = self.symbolic_space * space.symbolic_space
+        if hasattr(self, 'symbolic_mapping'):
+            sym = self.symbolic_mapping
+            setattr(Vh, 'symbolic_mapping', sym)
+        elif hasattr(space, 'symbolic_mapping'):
+            sym = space.symbolic_mapping
+            setattr(Vh, 'symbolic_mapping', sym)
+            
+        if hasattr(self, 'unique_grid'):
+            unique_grid = unique_grid and self.unique_grid
+
+        if hasattr(space, 'unique_grid'):
+            unique_grid = unique_grid and self.unique_grid
+            
+        if not unique_grid:
+            if isinstance(self, ProductFemSpace):
+                domain_1 = self.spaces[0].global_domain
+            else:
+                domain_1 = self.global_domain
+                
+            if isinstance(space, ProductFemSpace):
+                domain_2 = space.spaces[0].global_domain
+            else:
+                domain_2 = space.global_domain
+                
+            if not domain_1 == domain_2:
+                unique_grid = False
+
+
+        shape = 0
+        if hasattr(self, 'shape'):
+            shape += self.shape
+        if hasattr(space, 'shape'):
+            shape += space.shape
+
+        if shape:
+            setattr(Vh, 'shape', shape)
+            
+        setattr(Vh, 'symbolic_space', V)
+        setattr(Vh, 'unique_grid', unique_grid)
+        return  Vh
+
     #---------------------------------------
     # Abstract interface: evaluation methods
     #---------------------------------------
@@ -170,7 +228,7 @@ class FemField:
         (by default assume zero vector).
 
     """
-    def __init__( self, space, coeffs=None, normalize=False ):
+    def __init__( self, space, coeffs=None ):
 
         assert isinstance( space, FemSpace )
 
@@ -182,8 +240,6 @@ class FemField:
 
         self._space     = space
         self._coeffs    = coeffs
-        self._normalize = normalize
-
     # ...
     @property
     def space( self ):
@@ -203,11 +259,6 @@ class FemField:
 
         """
         return self._coeffs
-        
-    # ...
-    @property
-    def normalize(self):
-        return self._normalize
 
     # ...
     def __call__( self, *eta ):
@@ -223,3 +274,6 @@ class FemField:
     def divergence(self, *eta):
         """Evaluate divergence of vector field at location identified by logical coordinates eta."""
         return self._space.eval_field_divergence(self, *eta)
+
+from psydac.fem.vector import ProductFemSpace
+

@@ -11,7 +11,7 @@ from sympde.expr     import BilinearForm as sym_BilinearForm
 from sympde.expr     import LinearForm as sym_LinearForm
 from sympde.expr     import Functional as sym_Functional
 from sympde.expr     import Equation as sym_Equation
-from sympde.expr     import Boundary as sym_Boundary
+from sympde.expr     import Boundary as sym_Boundary, Connectivity as sym_Connectivity
 from sympde.expr     import Norm as sym_Norm
 from sympde.topology import Domain, Boundary
 from sympde.topology import Line, Square, Cube
@@ -73,6 +73,9 @@ class DiscreteBilinearForm(BasicDiscrete):
         kwargs['mapping']             = self.spaces[0].symbolic_mapping
         kwargs['is_rational_mapping'] = is_rational_mapping
         kwargs['comm']                = domain_h.comm
+        
+        boundary = kwargs.pop('boundary', [])
+        if boundary and isinstance(boundary, list): kwargs['boundary'] = boundary[0]
 
         BasicDiscrete.__init__(self, expr, kernel_expr, **kwargs)
 
@@ -82,20 +85,54 @@ class DiscreteBilinearForm(BasicDiscrete):
         # ...
 
         # ...
-        quad_order = kwargs.pop('quad_order', None)
-        boundary   = kwargs.pop('boundary',   None)
+        quad_order  = kwargs.pop('quad_order', None)
+        boundary    = kwargs.pop('boundary',   None)
+        target      = kwargs.pop('target', None)
+        
+        unique_grid = test_space.unique_grid and trial_space.unique_grid
         # ...
+        # ...
+        if not unique_grid:
+            assert isinstance(test_space, ProductFemSpace)
+            test_space  = test_space.spaces
+   
+            assert isinstance(trial_space, ProductFemSpace)
+            trial_space = trial_space.spaces
+            if boundary is None:
 
-        # ...
-        # TODO must check that spaces lead to the same QuadratureGrid
+                for space in test_space:
+                    if space.symbolic_space.domain==target:
+                        test_space = [space]
+                        break
+                        
+                for space in trial_space:
+                    if space.symbolic_space.domain==target:
+                        trial_space = [space]
+                        break
+            
+        else:
+            test_space  = [test_space]
+            trial_space = [trial_space]
+        
         if boundary is None:
-            self._grid = QuadratureGrid( test_space, quad_order = quad_order )
+            self._grid = [QuadratureGrid( space, quad_order=quad_order ) for space in test_space]
 
-        else:   
-            self._grid = BoundaryQuadratureGrid( test_space,
-                                                 boundary.axis,
-                                                 boundary.ext,
-                                                 quad_order = quad_order )
+        elif isinstance(boundary, sym_Boundary):
+            self._grid = [BoundaryQuadratureGrid( space,
+                                                  boundary.axis,
+                                                  boundary.ext,
+                                                  quad_order=quad_order) for space in test_space]
+                                                 
+        elif isinstance(boundary, sym_Connectivity):
+            #TODO improve
+            edge = list(boundary)[0]
+            axis = boundary[edge][0].axis
+            
+            assert len(test_space) == 2
+            self._grid = [BoundaryQuadratureGrid( space, axis, ext, quad_order=quad_order ) 
+                          for space,ext in zip(test_space,[-1,1])]
+
+
         # ...
         self._test_basis = BasisValues( test_space, self.grid,
                                         nderiv = self.max_nderiv )
@@ -119,7 +156,7 @@ class DiscreteBilinearForm(BasicDiscrete):
         return self._trial_basis
 
     def assemble(self, **kwargs):
-        newargs = tuple(self.spaces) + (self.grid, self.test_basis, self.trial_basis)
+        newargs = tuple(self.spaces) + (*self.grid, self.test_basis, self.trial_basis)
         if self.mapping:
             newargs = newargs + (self.mapping,)
 
@@ -158,31 +195,56 @@ class DiscreteLinearForm(BasicDiscrete):
         kwargs['is_rational_mapping'] = is_rational_mapping
         kwargs['comm']                = domain_h.comm
 
+        boundary = kwargs.pop('boundary', [])
+        if boundary and isinstance(boundary, list): kwargs['boundary'] = boundary[0]
+        
         BasicDiscrete.__init__(self, expr, kernel_expr, **kwargs)
 
         # ...
-        quad_order = kwargs.pop('quad_order', None)
-        boundary   = kwargs.pop('boundary',   None)
-        # ...
 
+        quad_order  = kwargs.pop('quad_order', None)
+        boundary    = kwargs.pop('boundary',   None)
+        target      = kwargs.pop('target', None)
+        
+        test_space  = self.space
+        unique_grid = test_space.unique_grid
+        # ...
+        # ...
+        if not unique_grid:
+            assert isinstance(test_space, ProductFemSpace)
+            test_space  = test_space.spaces
+
+            if boundary is None:
+
+                for space in test_space:
+                    if space.symbolic_space.domain==target:
+                        test_space = [space]
+                        break
+            
+        else:
+            test_space  = [test_space]
+            trial_space = [trial_space]
+            
         # ...
         if boundary is None:
-            self._grid = QuadratureGrid( self.space, quad_order = quad_order )
+            self._grid = [QuadratureGrid( space, quad_order = quad_order ) for space in test_space] 
 
-        else:
+        elif isinstance(boundary, sym_Boundary):
+            axis = boundary.axis
+            ext  = boundary.ext
+            self._grid = [BoundaryQuadratureGrid( space, axis, ext,
+                         quad_order = quad_order ) for space in test_space]
 
-            self._grid = BoundaryQuadratureGrid( self.space,
-                                                 boundary.axis,
-                                                 boundary.ext,
-                                                 quad_order = quad_order )
+        elif isinstance(boundary, sym_Connectivity):
+                axis = boundary.axis
+                ext  = [1,-1]
+                self._grid = [BoundaryQuadratureGrid( space, axis,
+                             e, quad_order = quad_order ) for space,e in zip(test_space, ext)]
 
         # ...
 
-        # ...
-        self._test_basis = BasisValues( self.space, self.grid,
+        self._test_basis = BasisValues( test_space, self.grid,
                                         nderiv = self.max_nderiv )
-
-
         # ...
 
     @property
@@ -198,7 +260,7 @@ class DiscreteLinearForm(BasicDiscrete):
         return self._test_basis
 
     def assemble(self, **kwargs):
-        newargs = (self.space, self.grid, self.test_basis)       
+        newargs = (self.space, *self.grid, self.test_basis)       
         if self.mapping:
             newargs = newargs + (self.mapping,)
 
@@ -300,10 +362,8 @@ class DiscreteFunctional(BasicDiscrete):
             if self.expr.exponent == 2:
                 # add abs because of 0 machine
                 v = np.sqrt(np.abs(v))
-
             else:
                 raise NotImplementedError('TODO')
-
         return v
 
 
@@ -328,10 +388,15 @@ class DiscreteSumForm(BasicDiscrete):
         # ...
         forms = []
         boundaries = kwargs.pop('boundary', [])
+        
+        unique_grid = True
+        for e in kernel_expr:
+            if isinstance(e.target, sym_Connectivity):
+                unique_grid = False
 
         for e in kernel_expr:
             kwargs['target'] = e.target
-            if isinstance(e.target, sym_Boundary):
+            if isinstance(e.target, (sym_Boundary, sym_Connectivity)):
                 boundary = [i for i in boundaries if i is e.target]
                 if boundary: kwargs['boundary'] = boundary[0]
 
@@ -361,24 +426,32 @@ class DiscreteSumForm(BasicDiscrete):
         for form in self.forms[1:]:
             
             if isinstance(M, (StencilVector, StencilMatrix)):
-                M = [M]
+                M = {0: M}
             elif isinstance(M, BlockVector):
-                M = list(M.blocks)
+                M = {i:M[i] for i in range(len(M.blocks))}
             elif isinstance(M, BlockLinearOperator):
-                M = [e for row in M.blocks for e in row  if e is not None]
-                
-            n = len(form.interface.inout_arguments)
-            # add arguments                
-            for i in range(0, n):
-                key = str(form.interface.inout_arguments[i])
-                kwargs[key] = M[i]
+                M = {(i,j):M[i,j] for i in range(M.n_block_rows) 
+                    for j in range(M.n_block_cols)}
 
-            M = form.assemble(**kwargs)
-
+            if M:
+                B = form.assemble(**kwargs)
+                if isinstance(B, (StencilVector, StencilMatrix)):
+                    B = [B]
+                for key in M:
+                    if M[key] and B[key]:
+                        B[key]._data += M[key]._data
+                    elif M[key]:
+                        assert B[key] is None
+                        B[key] = M[key]
+                    elif B[key]:
+                        assert M[key] is None
                 
-            # remove arguments
-            for i in range(0, n):
-                key = str(form.interface.inout_arguments[i])
-                kwargs.pop(key)
+                if isinstance(B, list):
+                    assert len(B) == 1
+                    B = B[0]
+
+                M = B
+            else:
+                M = form.assemble(**kwargs)
 
         return M

@@ -67,8 +67,8 @@ class SplBasic(Basic):
         return self._is_rational_mapping
 
     @property
-    def discrete_boundary(self):
-        return self._discrete_boundary
+    def boundary(self):
+        return self._boundary
 
     @property
     def imports(self):
