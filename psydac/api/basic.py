@@ -598,6 +598,7 @@ class BasicDiscrete(BasicCodeGen):
         backend             = kwargs.pop('backend', PSYDAC_BACKEND_PYTHON)
         discrete_space      = kwargs.pop('discrete_space', None)
         symbolic_space      = kwargs.pop('symbolic_space', None)
+        unique_grid         = kwargs.pop('unique_grid', None)
         comm                = kwargs.pop('comm', None)
 
         if kernel_expr is None:
@@ -611,6 +612,7 @@ class BasicDiscrete(BasicCodeGen):
                          boundary            = boundary,
                          boundary_basis      = boundary_basis,
                          symbolic_space      = symbolic_space,
+                         unique_grid         = unique_grid,
                          backend = backend )
 
         assembly = Assembly( kernel,

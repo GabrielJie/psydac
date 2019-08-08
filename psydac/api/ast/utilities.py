@@ -540,12 +540,11 @@ def fusion_loops(loops):
 def compute_normal_vector(vector, boundary, mapping):
     dim = len(vector)
     pdim = dim - 1
-    #if len(discrete_boundary) > 1: raise NotImplementedError('TODO')
-
+    
     if isinstance(boundary, Boundary):
         axis = boundary.axis ; ext = boundary.ext
     else:
-        axis = boundary.axis ; ext = -1
+        axis = boundary.axis ; ext = 1
 
     map_stmts = []
     body = []

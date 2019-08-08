@@ -75,22 +75,26 @@ class DiscreteBilinearForm(BasicDiscrete):
         kwargs['comm']                = domain_h.comm
         
         boundary = kwargs.pop('boundary', [])
-        if boundary and isinstance(boundary, list): kwargs['boundary'] = boundary[0]
+        if boundary and isinstance(boundary, list):
+            kwargs['boundary'] = boundary[0]
+        elif boundary:
+            kwargs['boundary'] = boundary
 
-        BasicDiscrete.__init__(self, expr, kernel_expr, **kwargs)
-
-        # ...
         test_space  = self.spaces[0]
         trial_space = self.spaces[1]
+        
+        unique_grid = test_space.unique_grid and trial_space.unique_grid
+        kwargs['unique_grid'] = unique_grid
+        
         # ...
+        BasicDiscrete.__init__(self, expr, kernel_expr, **kwargs)
 
         # ...
         quad_order  = kwargs.pop('quad_order', None)
         boundary    = kwargs.pop('boundary',   None)
         target      = kwargs.pop('target', None)
-        
-        unique_grid = test_space.unique_grid and trial_space.unique_grid
         # ...
+
         # ...
         if not unique_grid:
             assert isinstance(test_space, ProductFemSpace)
@@ -107,6 +111,17 @@ class DiscreteBilinearForm(BasicDiscrete):
                         
                 for space in trial_space:
                     if space.symbolic_space.domain==target:
+                        trial_space = [space]
+                        break
+            elif isinstance(boundary, Boundary):
+
+                for space in test_space:
+                    if space.symbolic_space.domain==boundary.domain:
+                        test_space = [space]
+                        break
+                        
+                for space in trial_space:
+                    if space.symbolic_space.domain==boundary.domain:
                         trial_space = [space]
                         break
             
@@ -126,11 +141,13 @@ class DiscreteBilinearForm(BasicDiscrete):
         elif isinstance(boundary, sym_Connectivity):
             #TODO improve
             edge = list(boundary)[0]
-            axis = boundary[edge][0].axis
+            boundary = boundary[edge]
+            axis     = boundary[0].axis
+            ext      = [bd.ext for bd in boundary]
             
             assert len(test_space) == 2
             self._grid = [BoundaryQuadratureGrid( space, axis, ext, quad_order=quad_order ) 
-                          for space,ext in zip(test_space,[-1,1])]
+                          for space,ext in zip(test_space,ext)]
 
 
         # ...
@@ -196,7 +213,14 @@ class DiscreteLinearForm(BasicDiscrete):
         kwargs['comm']                = domain_h.comm
 
         boundary = kwargs.pop('boundary', [])
-        if boundary and isinstance(boundary, list): kwargs['boundary'] = boundary[0]
+        if boundary and isinstance(boundary, list):
+            kwargs['boundary'] = boundary[0]
+        elif boundary:
+            kwargs['boundary'] = boundary
+
+        test_space  = self.space
+        unique_grid = test_space.unique_grid
+        kwargs['unique_grid'] = unique_grid
         
         BasicDiscrete.__init__(self, expr, kernel_expr, **kwargs)
 
@@ -206,8 +230,7 @@ class DiscreteLinearForm(BasicDiscrete):
         boundary    = kwargs.pop('boundary',   None)
         target      = kwargs.pop('target', None)
         
-        test_space  = self.space
-        unique_grid = test_space.unique_grid
+
         # ...
         # ...
         if not unique_grid:
@@ -220,7 +243,12 @@ class DiscreteLinearForm(BasicDiscrete):
                     if space.symbolic_space.domain==target:
                         test_space = [space]
                         break
-            
+            elif isinstance(boundary, Boundary):
+
+                for space in test_space:
+                    if space.symbolic_space.domain==boundary.domain:
+                        test_space = [space]
+                        break        
         else:
             test_space  = [test_space]
             trial_space = [trial_space]
@@ -236,8 +264,10 @@ class DiscreteLinearForm(BasicDiscrete):
                          quad_order = quad_order ) for space in test_space]
 
         elif isinstance(boundary, sym_Connectivity):
-                axis = boundary.axis
-                ext  = [1,-1]
+                edge = list(boundary)[0]
+                boundary = boundary[edge]
+                axis     = boundary[0].axis
+                ext      = [bd.ext for bd in boundary]
                 self._grid = [BoundaryQuadratureGrid( space, axis,
                              e, quad_order = quad_order ) for space,e in zip(test_space, ext)]
 

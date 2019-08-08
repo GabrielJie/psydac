@@ -190,7 +190,7 @@ class BoundaryQuadratureGrid(QuadratureGrid):
             bounds = {}
             bounds[-1] = V.spaces[axis].domain[0]
             bounds[1]  = V.spaces[axis].domain[1]
-            print(bounds)
+
             points[axis]     = np.asarray([[bounds[ext]]])
             weights[axis]    = np.asarray([[1.]])
         # ...
@@ -269,8 +269,8 @@ class BasisValues():
                 ext  = grid.ext
                 sp_space = space.spaces[axis]
                 points = grid.points[axis]
-                boundaray_basis = basis_ders_on_quad_grid(sp_space.knots, sp_space.degree, points, nderiv)
-                self._basis[-1][axis][0:1,:,:,0:1] = boundaray_basis
+                boundary_basis = basis_ders_on_quad_grid(sp_space.knots, sp_space.degree, points, nderiv)
+                self._basis[-1][axis][0:1,:,:,0:1] = boundary_basis
             
     @property
     def basis(self):

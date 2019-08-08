@@ -188,7 +188,7 @@ def run_maxwell_2d_nitsche_dir(solution, f, ncells, degree, s, kappa, mu, comm=N
 
 
 #==============================================================================
-def run_laplace_2d_2_patchs_nitsche_dir(solution, f1, f2, ncells, degree, kappa, comm=None):
+def run_laplace_2d_2_patchs_nitsche_dir(solution, f, ncells, degree, kappa, comm=None):
 
     # ... abstract model
     domain  = two_patches_Square()
@@ -199,6 +199,11 @@ def run_laplace_2d_2_patchs_nitsche_dir(solution, f1, f2, ncells, degree, kappa,
     V2 = FunctionSpace('V2', domain2)
 
     B = domain.connectivity
+    B1 = list(B._data.values())[0][0]
+    B2 = list(B._data.values())[0][-1]
+    
+    bd1 = Union(*domain.boundary.args[::2]) 
+    bd2 = Union(*domain.boundary.args[1::2])
 
     v1 = element_of_space(V1, name='v1')
     u1 = element_of_space(V1, name='u1')
@@ -209,47 +214,47 @@ def run_laplace_2d_2_patchs_nitsche_dir(solution, f1, f2, ncells, degree, kappa,
     a0  = BilinearForm(((u1,u2),(v1,v2)), dot(grad(v1),grad(u1)) + dot(grad(v2),grad(u2)))
 
     a_B = BilinearForm(((u1,u2),(v1,v2)),\
-                                -0.5*trace_0(u1, B) * trace_1(grad(v1), B)\
-                                +0.5*trace_0(u2, B) * trace_1(grad(v2), B)\
+                                -0.5*trace_0(u1, B1) * trace_1(grad(v1), B1)\
+                                -0.5*trace_0(u2, B2) * trace_1(grad(v2), B2)\
                                 +0.5*trace_0(u2, B) * trace_1(grad(v1), B)\
-                                -0.5*trace_0(u1, B) * trace_1(grad(v2), B)\
+                                 +0.5*trace_0(u1, B) * trace_1(grad(v2), B)\
                                 
-                                -0.5*trace_0(v1, B) * trace_1(grad(u1), B)\
-                                +0.5*trace_0(v2, B) * trace_1(grad(u2), B)\
+                                -0.5*trace_0(v1, B1) * trace_1(grad(u1), B1)\
+                                -0.5*trace_0(v2, B2) * trace_1(grad(u2), B2)\
                                 +0.5*trace_0(v2, B) * trace_1(grad(u1), B)\
-                                -0.5*trace_0(v1, B) * trace_1(grad(u2), B)\
+                                +0.5*trace_0(v1, B) * trace_1(grad(u2), B)\
                                 
-                              +kappa*trace_0(u1, B) * trace_0(v1, B)\
-                              +kappa*trace_0(u2, B) * trace_0(v2, B)\
+                              +kappa*trace_0(u1, B1) * trace_0(v1, B1)\
+                              +kappa*trace_0(u2, B2) * trace_0(v2, B2)\
                               -kappa*trace_0(u1, B) * trace_0(v2, B)\
                               -kappa*trace_0(u2, B) * trace_0(v1, B)\
                                 
-                            #        -trace_0(u1, B.complement(B1)) * trace_1(grad(v1), B.complement(B1))\
-                            #        -trace_0(u2, B.complement(B2)) * trace_1(grad(v2), B.complement(B2))\
+                                #    -trace_0(u1, bd1.complement(B1)) * trace_1(grad(v1), bd1.complement(B1))\
+                               #     -trace_0(u2, bd2.complement(B2)) * trace_1(grad(v2), bd2.complement(B2))\
                                 
-                            #        -trace_0(v1, B.complement(B1)) * trace_1(grad(u1), B.complement(B1))\
-                            #        -trace_0(v2, B.complement(B2)) * trace_1(grad(u2), B.complement(B2))\
+                              #      -trace_0(v1, bd1.complement(B1)) * trace_1(grad(u1), bd1.complement(B1))\
+                             #       -trace_0(v2, bd2.complement(B2)) * trace_1(grad(u2), bd2.complement(B2))\
                                
-                            #  +kappa*trace_0(u1, B.complement(B1)) * trace_0(v1, B.complement(B1))\
-                            #  +kappa*trace_0(u2, B.complement(B2)) * trace_0(v2, B.complement(B2))\
+                            #  +kappa*trace_0(u1, bd1.complement(B1)) * trace_0(v1, bd1.complement(B1))\
+                           #   +kappa*trace_0(u2, bd2.complement(B2)) * trace_0(v2, bd2.complement(B2))\
                                 
                                     )
                             
     
     
     a = BilinearForm(((u1,u2),(v1,v2)), 
-                                       #a0((u1,u2),(v1,v2))\
-                                       a_B((u1,u2),(v1,v2))\
+                                       a0((u1,u2),(v1,v2))\
+                                       +a_B((u1,u2),(v1,v2))\
                                       )
 
-    l0  = LinearForm((v1,v2), f1*v1+ f2*v2)
+    l0  = LinearForm((v1,v2), f*v1+ f*v2)
     
     l   = LinearForm((v1,v2), l0(v1,v2))
 
-    #bc1 = EssentialBC(u1, 0, domain1.boundary.complement(B1))
-    #bc2 = EssentialBC(u2, 0, domain2.boundary.complement(B2))
+    bc1 = EssentialBC(u1, 0, bd1.complement(B1))
+    bc2 = EssentialBC(u2, 0, bd2.complement(B2))
     
-    equation = find((u1,u2), forall=(v1,v2), lhs=a((u1,u2),(v1,v2)), rhs=l(v1,v2))
+    equation = find((u1,u2), forall=(v1,v2), lhs=a((u1,u2),(v1,v2)), rhs=l(v1,v2), bc=[bc1, bc2])
     # ...
     
     # ... create the computational domain from a topological domain
@@ -282,7 +287,7 @@ def run_laplace_2d_2_patchs_nitsche_dir(solution, f1, f2, ncells, degree, kappa,
     # ...
     
     k1, k2 = np.pi,np.pi
-    model = lambda x,y:x**2*y**2
+    model = lambda x,y:np.sin(k1*x)*np.sin(k2*y)
     
     # ...
     fig, axs   = plt.subplots(1,2, sharey=True)
@@ -303,8 +308,11 @@ def run_laplace_2d_2_patchs_nitsche_dir(solution, f1, f2, ncells, degree, kappa,
     
     fig.colorbar(cp)
     
-    axs2[0].contourf(X1, Y, model(X1, Y))   
-    cp2 = axs2[1].contourf(X2, Y, model(X2, Y)) 
+    Z1  = np.array( [[model(xi, yj) for xi in x1] for yj in y] )
+    Z2  = np.array( [[model(xi, yj) for xi in x2] for yj in y] )
+    
+    axs2[0].contourf(X1, Y, Z1)   
+    cp2 = axs2[1].contourf(X2, Y, Z2) 
     
     fig2.colorbar(cp2)
     
@@ -362,11 +370,12 @@ def test_api_maxwell_2d_nitsche_dir():
 def test_api_2_patchs_2d_nitsche_dir():
 
     from sympy.abc import x,y
+    from sympy import pi,sin
     
-    solution = x**2*y**2
-    f1       = 2*(x**2 + y**2)
+    solution = sin(pi*x)*sin(pi*y)
+    f       = pi**2*solution
     
-    run_laplace_2d_2_patchs_nitsche_dir(solution, f1, f1, ncells=[2**3,2**3], 
+    run_laplace_2d_2_patchs_nitsche_dir(solution, f, ncells=[2**3,2**3], 
                                                     degree=[2,2], kappa=10**10)
 
 #==============================================================================

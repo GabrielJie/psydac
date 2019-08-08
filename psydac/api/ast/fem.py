@@ -263,7 +263,8 @@ class Kernel(SplBasic):
 
     def __new__(cls, weak_form, kernel_expr, target=None,
                 boundary=None, name=None, boundary_basis=None,
-                mapping=None, is_rational_mapping=None, symbolic_space=None, backend=None):
+                mapping=None, is_rational_mapping=None, symbolic_space=None, 
+                unique_grid=True, backend=None):
 
         if not isinstance(weak_form, FunctionalForms):
             raise TypeError('> Expecting a weak formulation')
@@ -303,7 +304,6 @@ class Kernel(SplBasic):
             if not isinstance(boundary, (Boundary, Connectivity)):
                 raise TypeError('> Expecting a Boundary or Connectivity for boundary')
         # ...
-
         # ... boundary must be given if there are Trace nodes
         if on_boundary and not boundary:
             raise ValueError('> bounary must be provided for a boundary Kernel')
@@ -328,6 +328,7 @@ class Kernel(SplBasic):
         obj._user_functions      = []
         obj._backend             = backend
         obj._symbolic_space      = symbolic_space
+        obj._unique_grid         = unique_grid
         obj._unique_scalar_space = unique_scalar_space
 
         obj._func = obj._initialize()
@@ -438,6 +439,10 @@ class Kernel(SplBasic):
     @property
     def symbolic_space(self):
         return self._symbolic_space
+        
+    @property
+    def unique_grid(self):
+        return self._unique_grid
 
     @property
     def backend(self):
@@ -459,7 +464,10 @@ class Kernel(SplBasic):
         is_linear   = isinstance(self.weak_form, LinearForm)
         is_bilinear = isinstance(self.weak_form, BilinearForm)
         is_function = isinstance(self.weak_form, Functional)
+        unique_grid = self.unique_grid
+        
         unique_scalar_space = self.unique_scalar_space
+
 
         expr = self.kernel_expr
         mapping = self.mapping
@@ -832,19 +840,20 @@ class Kernel(SplBasic):
             for stmt in map_stmts:
                 init_map[str(stmt.lhs)] = stmt
 
-        if unique_scalar_space:
+        if not unique_scalar_space or not unique_grid:
+
+            funcs = [[None]*self._n_cols for i in range(self._n_rows)]
+            
+        else:
             ln   = 1
             funcs = [[None]]
 
-        else:
-            funcs = [[None]*self._n_cols for i in range(self._n_rows)]
-
         for indx in range(ln):
 
-            if not unique_scalar_space and indx in zero_terms:
+            if not unique_scalar_space  or not unique_grid and indx in zero_terms:
                 continue
 
-            elif not unique_scalar_space:
+            elif not unique_scalar_space or not unique_grid:
                 start = indx
                 end   = indx + 1
                 i_row = indx//self._n_cols
@@ -866,7 +875,7 @@ class Kernel(SplBasic):
 
             # ... normal/tangent vectors
             init_map_bnd   = OrderedDict()
-            if isinstance(self.target, Boundary):
+            if isinstance(self.target, (Boundary, Connectivity)):
                 vectors = self.kernel_expr.atoms(BoundaryVector)
                 normal_vec = symbols('normal_1:%d'%(dim+1))
                 tangent_vec = symbols('tangent_1:%d'%(dim+1))
@@ -1257,6 +1266,9 @@ class Assembly(SplBasic):
         if is_product_space:
             ln = len(Wh.spaces)
 
+        trial_space_indices = [0]
+        test_space_indices  = [0]
+        
         if not unique_grid:
             if boundary is None:
                 for i,space in enumerate(Wh.spaces):
@@ -1269,9 +1281,35 @@ class Assembly(SplBasic):
                         if space.symbolic_space.domain==target:
                             trial_space_indices = (i,)
                             break
-            else:
+            elif isinstance(boundary, Boundary):
+                for i,space in enumerate(Wh.spaces):
+                    if space.symbolic_space.domain==target.domain:
+                        test_space_indices = (i,)
+                        break
+                        
+                if is_bilinear:
+                    for i,space in enumerate(Vh.spaces):
+                        if space.symbolic_space.domain==target.domain:
+                            trial_space_indices = (i,)
+                            break
+            elif isinstance(boundary, Connectivity):
                 grids_len = 2
-                ln        = 2
+                edge =  list(boundary)[0]
+                boundaries = boundary[edge]
+                domains = tuple(bd.domain for bd in boundaries)
+                test_space_indices = []
+                for i,space in enumerate(Wh.spaces):
+                    if space.symbolic_space.domain in domains:
+                        test_space_indices.append(i)
+                assert len(test_space_indices) == grids_len
+                   
+                if is_bilinear:
+                    trial_space_indices = []
+                    for i,space in enumerate(Vh.spaces):
+                        if space.symbolic_space.domain in domains:
+                            trial_space_indices.append(i)
+                    assert len(trial_space_indices) == grids_len      
+
         else:
 
             if is_bilinear:
@@ -1417,10 +1455,10 @@ class Assembly(SplBasic):
             msg = lambda x: (String('> span {} = '.format(x)), x)
             body += [Print(msg(indices_span[i])) for i in range(dim*ln)]
         
-        body += [Assign(points_in_elm[i], points[i][indices_elm[i],_slice])
+        body += [Assign(points_in_elm[i], points[i*grids_len][indices_elm[i],_slice])
                  for i in range(dim) if not(i in axis_bnd) ]
 
-        body += [Assign(weights_in_elm[i], weights[i][indices_elm[i],_slice])
+        body += [Assign(weights_in_elm[i], weights[i*grids_len][indices_elm[i],_slice])
                  for i in range(dim) if not(i in axis_bnd) ]
 
         body += [Assign(test_basis_in_elm[i*ln+j], test_basis[i*ln+j][indices_elm[i],_slice,_slice,_slice])
@@ -1485,17 +1523,21 @@ class Assembly(SplBasic):
             m_coeffs = tuple([f[gslices] for f in kernel.mapping_coeffs])
 
         if is_bilinear:
-            if not unique_scalar_space:
+            if not unique_scalar_space or not unique_grid:
                 for (i,j), M in element_matrices.items():
+                    pads = [max(pi,pj) for pi,pj in zip(Vh.spaces[i].degree,Wh.spaces[j].degree)]
                     args = kernel.build_arguments(f_coeffs + vf_coeffs + m_coeffs + (M,))
                     args = list(args)
+                    funcs = kernel.func[i][j]
+                    if grids_len == 1:
+                        i,j = 0,0
                     args[:dim] = test_degrees[i::ln]
                     args[dim:2*dim] = trial_degrees[j::ln]
-                    args[2*dim:3*dim] = [max(pi,pj) for pi,pj in zip(Vh.spaces[i].degree,Wh.spaces[j].degree)]
+                    args[2*dim:3*dim] = pads
                     args[3*dim:4*dim] = test_basis_in_elm[i::ln]
                     args[4*dim:5*dim] = trial_basis_in_elm[j::ln]
                     
-                    body += [FunctionCall(kernel.func[i][j], args)]
+                    body += [FunctionCall(funcs, args)]
 
             else:
                 args = kernel.build_arguments(f_coeffs + vf_coeffs + m_coeffs + mats)
@@ -1512,19 +1554,19 @@ class Assembly(SplBasic):
         else:
             if not unique_scalar_space:
                 for (i,j), M in element_matrices.items():
-
                     args = kernel.build_arguments(f_coeffs + vf_coeffs + m_coeffs + (M,))
                     args = list(args)
                     args[:dim] = test_degrees[i::ln]
                     args[dim:2*dim] = test_basis_in_elm[i::ln]
                     body += [FunctionCall(kernel.func[i][j], args)]
-
             else:
+                j = trial_space_indices[0]
+                i = test_space_indices[0]
                 args = kernel.build_arguments(f_coeffs + vf_coeffs + m_coeffs + mats)
                 args = list(args)
                 args[:dim] = test_degrees[::ln]
                 args[dim:2*dim] = test_basis_in_elm[::ln]
-                body += [FunctionCall(kernel.func[0][0], args)]
+                body += [FunctionCall(kernel.func[i][j], args)]
 
         # ...
 
@@ -1647,9 +1689,7 @@ class Assembly(SplBasic):
                 args = tuple([1])
 
             stmt = Assign(mat, Zeros(args))
-            prelude += [Print(args), stmt]
-
-
+            prelude += [stmt]
 
         # allocate mapping values
         if self.kernel.mapping_values:
@@ -1835,16 +1875,44 @@ class Interface(SplBasic):
             if boundary is None:
                 for i,space in enumerate(Wh.spaces):
                     if space.symbolic_space.domain==target:
-                        test_space_indices = [i]
+                        test_space_indices = (i,)
                         break
                         
                 if is_bilinear:
                     for i,space in enumerate(Vh.spaces):
                         if space.symbolic_space.domain==target:
-                            trial_space_indices = [i]
+                            trial_space_indices = (i,)
                             break
-            else: 
+            elif isinstance(boundary, Boundary):
+                for i,space in enumerate(Wh.spaces):
+                    if space.symbolic_space.domain==target.domain:
+                        test_space_indices = (i,)
+                        break
+                        
+                if is_bilinear:
+                    for i,space in enumerate(Vh.spaces):
+                        if space.symbolic_space.domain==target.domain:
+                            trial_space_indices = (i,)
+                            break
+            elif isinstance(boundary, Connectivity):
                 grids_len = 2
+                edge =  list(boundary)[0]
+                boundaries = boundary[edge]
+                domains = tuple(bd.domain for bd in boundaries)
+                test_space_indices = []
+                for i,space in enumerate(Wh.spaces):
+                    if space.symbolic_space.domain in domains:
+                        test_space_indices.append(i)
+                        
+                assert len(test_space_indices) == grids_len
+                   
+                if is_bilinear:
+                    trial_space_indices = []
+                    for i,space in enumerate(Vh.spaces):
+                        if space.symbolic_space.domain in domains:
+                            trial_space_indices.append(i)
+                    assert len(trial_space_indices) == grids_len
+
         else:
 
             if is_bilinear:
