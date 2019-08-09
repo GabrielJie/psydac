@@ -80,10 +80,8 @@ def apply_essential_bc_2d_StencilVector(V, bc, a):
 #==============================================================================
 def apply_essential_bc_2d_StencilMatrix(V, bc, a, identity=False):
     """ Apply homogeneous dirichlet boundary conditions in 2D """
-
     # assumes a 2D Tensor space
     # add asserts on the space if it is periodic
-    print(identity,'mat')
 
     V1,V2 = V.spaces
 
@@ -232,17 +230,17 @@ def apply_essential_bc_3d_StencilMatrix(V, bc, a, identity=False):
 # V is a ProductFemSpace here
 def apply_essential_bc_BlockMatrix(V, bc, a, identity=False):
     """ Apply homogeneous dirichlet boundary conditions in nD """
-    print(identity,'block')
+
     identity_cp = identity
-    print(bc.index_component)
+
     if bc.index_component:
         keys = list(a._blocks.keys())
         for i_loc in bc.index_component:
             i = bc.position + i_loc
             js = [ij[1] for ij in keys if ij[0] == i]
             for j in js:
+                
                 M = a[i,j]
-
                 W = V.spaces[i]
                 identity = identity and i==j
                 apply_essential_bc(W, bc, M , identity=identity)
@@ -257,7 +255,6 @@ def apply_essential_bc_BlockVector(V, bc, a):
     if bc.index_component:
         for i_loc in bc.index_component:
             i = bc.position + i_loc
-
             M = a[i]
             W = V.spaces[i]
             apply_essential_bc(W, bc, M)
@@ -266,7 +263,6 @@ def apply_essential_bc_BlockVector(V, bc, a):
 #==============================================================================
 # TODO must pass two spaces for a matrix
 def apply_essential_bc(V, bc, *args, **kwargs):
-    print(kwargs,'###')
 
     if not isinstance(bc, (tuple, list)):
         bc = [bc]

@@ -215,12 +215,12 @@ def run_laplace_2d_2_patchs_nitsche_dir(solution, f, ncells, degree, kappa, comm
 
     a_B = BilinearForm(((u1,u2),(v1,v2)),\
                                 -0.5*trace_0(u1, B1) * trace_1(grad(v1), B1)\
-                                -0.5*trace_0(u2, B2) * trace_1(grad(v2), B2)\
+                                +0.5*trace_0(u2, B2) * trace_1(grad(v2), B2)\
                                 +0.5*trace_0(u2, B) * trace_1(grad(v1), B)\
                                  +0.5*trace_0(u1, B) * trace_1(grad(v2), B)\
                                 
                                 -0.5*trace_0(v1, B1) * trace_1(grad(u1), B1)\
-                                -0.5*trace_0(v2, B2) * trace_1(grad(u2), B2)\
+                                +0.5*trace_0(v2, B2) * trace_1(grad(u2), B2)\
                                 +0.5*trace_0(v2, B) * trace_1(grad(u1), B)\
                                 +0.5*trace_0(v1, B) * trace_1(grad(u2), B)\
                                 
@@ -228,16 +228,6 @@ def run_laplace_2d_2_patchs_nitsche_dir(solution, f, ncells, degree, kappa, comm
                               +kappa*trace_0(u2, B2) * trace_0(v2, B2)\
                               -kappa*trace_0(u1, B) * trace_0(v2, B)\
                               -kappa*trace_0(u2, B) * trace_0(v1, B)\
-                                
-                                #    -trace_0(u1, bd1.complement(B1)) * trace_1(grad(v1), bd1.complement(B1))\
-                               #     -trace_0(u2, bd2.complement(B2)) * trace_1(grad(v2), bd2.complement(B2))\
-                                
-                              #      -trace_0(v1, bd1.complement(B1)) * trace_1(grad(u1), bd1.complement(B1))\
-                             #       -trace_0(v2, bd2.complement(B2)) * trace_1(grad(u2), bd2.complement(B2))\
-                               
-                            #  +kappa*trace_0(u1, bd1.complement(B1)) * trace_0(v1, bd1.complement(B1))\
-                           #   +kappa*trace_0(u2, bd2.complement(B2)) * trace_0(v2, bd2.complement(B2))\
-                                
                                     )
                             
     
@@ -253,10 +243,17 @@ def run_laplace_2d_2_patchs_nitsche_dir(solution, f, ncells, degree, kappa, comm
 
     bc1 = EssentialBC(u1, 0, bd1.complement(B1))
     bc2 = EssentialBC(u2, 0, bd2.complement(B2))
+   
+    bc1._index_component = [0]
+    bc1._position        = 0
+    bc2._index_component = [1]
+    bc2._position        = 0
+    
     
     equation = find((u1,u2), forall=(v1,v2), lhs=a((u1,u2),(v1,v2)), rhs=l(v1,v2), bc=[bc1, bc2])
     # ...
-    
+    for i in equation.bc:
+        i.set_position(0)
     # ... create the computational domain from a topological domain
     domain_h1 = discretize(domain1, ncells=[ncells[0]//2,ncells[1]], comm=comm)
     domain_h2 = discretize(domain2, ncells=[ncells[0]//2,ncells[1]], comm=comm)
