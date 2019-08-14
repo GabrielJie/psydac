@@ -495,13 +495,13 @@ def test_api_laplace_2d_neu_identity():
     f        = (2.*pi**2 + 1.)*solution
 
     l2_error, h1_error = run_laplace_2d_neu(filename, solution, f)
-
+    print(l2_error, h1_error)
     expected_l2_error =  0.00021728465388208586
     expected_h1_error =  0.012984852988123631
 
     assert( abs(l2_error - expected_l2_error) < 1.e-7)
     assert( abs(h1_error - expected_h1_error) < 1.e-7)
-
+test_api_laplace_2d_neu_identity()
 ##==============================================================================
 ## TODO DEBUG, not working since merge with devel
 #def test_api_laplace_2d_neu_collela():

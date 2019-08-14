@@ -26,6 +26,7 @@ from sympde.topology.space import IndexedTestTrial
 from sympde.topology import ScalarField
 from sympde.topology import VectorField, IndexedVectorField
 from sympde.topology import Mapping
+from sympde.topology import Connectivity, Boundary
 from sympde.topology.derivatives import print_expression
 from sympde.topology.derivatives import get_atom_derivatives
 from sympde.topology.derivatives import get_index_derivatives
@@ -463,15 +464,19 @@ def rationalize_eval_mapping(mapping, nderiv, space, indices_quad):
     return stmts
 
 #==============================================================================
-def filter_product(indices, args, discrete_boundary):
+def filter_product(indices, args, boundary):
 
     mask = []
     ext = []
-    if discrete_boundary:
-        # TODO improve using namedtuple or a specific class ? to avoid the 0 index
-        #      => make it easier to understand
-        mask = [i[0] for i in discrete_boundary]
-        ext  = [i[1] for i in discrete_boundary]
+    if boundary:
+
+        if isinstance(boundary, Boundary):
+            mask = [boundary.axis]
+            ext  = [boundary.ext]
+        else:
+            mask = [boundary.axis]
+            ext  = [-1, 1]
+            
 
         # discrete_boundary gives the perpendicular indices, then we need to
         # remove them from directions
@@ -483,15 +488,17 @@ def filter_product(indices, args, discrete_boundary):
 
 #==============================================================================
 # TODO remove it later
-def filter_loops(indices, ranges, body, discrete_boundary, boundary_basis=False):
+def filter_loops(indices, ranges, body, boundary, boundary_basis=False):
 
     quad_mask = []
     quad_ext = []
-    if discrete_boundary:
-        # TODO improve using namedtuple or a specific class ? to avoid the 0 index
-        #      => make it easier to understand
-        quad_mask = [i[0] for i in discrete_boundary]
-        quad_ext  = [i[1] for i in discrete_boundary]
+    if boundary:
+        if isinstance(boundary, Boundary):
+            quad_mask = [boundary.axis]
+            quad_ext  = [boundary.ext]
+        else:
+            quad_mask = [boundary.axis]
+            quad_ext  = [-1, 1]
 
         # discrete_boundary gives the perpendicular indices, then we need to
         # remove them from directions
@@ -522,15 +529,19 @@ def filter_loops(indices, ranges, body, discrete_boundary, boundary_basis=False)
     return body
 
 #==============================================================================
-def select_loops(indices, ranges, body, discrete_boundary, boundary_basis=False):
+def select_loops(indices, ranges, body, boundary, boundary_basis=False):
 
     quad_mask = []
     quad_ext = []
-    if discrete_boundary:
+    if boundary:
         # TODO improve using namedtuple or a specific class ? to avoid the 0 index
         #      => make it easier to understand
-        quad_mask = [i[0] for i in discrete_boundary]
-        quad_ext  = [i[1] for i in discrete_boundary]
+        if isinstance(boundary, Boundary):
+            quad_mask = [boundary.axis]
+            quad_ext  = [boundary.ext]
+        else:
+            quad_mask = [boundary.axis]
+            quad_ext  = [-1, 1]
 
         # discrete_boundary gives the perpendicular indices, then we need to
         # remove them from directions
@@ -582,13 +593,14 @@ def fusion_loops(loops):
         return loops_cp
 
 #==============================================================================
-def compute_normal_vector(vector, discrete_boundary, mapping):
+def compute_normal_vector(vector, boundary, mapping):
     dim = len(vector)
-    pdim = dim - len(discrete_boundary)
-    if len(discrete_boundary) > 1: raise NotImplementedError('TODO')
-
-    face = discrete_boundary[0]
-    axis = face[0] ; ext = face[1]
+    pdim = dim - 1
+    
+    if isinstance(boundary, Boundary):
+        axis = boundary.axis ; ext = boundary.ext
+    else:
+        axis = boundary.axis ; ext = 1
 
     map_stmts = []
     body = []
@@ -600,8 +612,8 @@ def compute_normal_vector(vector, discrete_boundary, mapping):
 
     else:
         M = mapping
-        inv_jac = Symbol('inv_jac')
-        det_jac = Symbol('det_jac')
+        inv_jac_bnd = Symbol('inv_jac_bnd')
+        det_jac_bnd = Symbol('det_jac_bnd')
 
         # ... construct jacobian on manifold
         lines = []
@@ -629,7 +641,7 @@ def compute_normal_vector(vector, discrete_boundary, mapping):
             # Fortran between sqrt and Pow(, 1/2)?
             j = (sum(J[i]**2 for i in range(0, dim)))**(1/2)
 
-            values = [inv_jac*J[1], -inv_jac*J[0]]
+            values = [inv_jac_bnd*J[1], -inv_jac_bnd*J[0]]
 
         elif dim == 3:
 
@@ -638,14 +650,14 @@ def compute_normal_vector(vector, discrete_boundary, mapping):
 
             values = Cross_3d(x_s, x_t)
             j = (sum(J[i]**2 for i in range(0, dim)))**(1/2)
-            values = [inv_jac*v for v in values]
+            values = [inv_jac_bnd*v for v in values]
 
 
         # change the orientation
         values = [ext*i for i in values]
 
-        map_stmts += [Assign(det_jac, j)]
-        map_stmts += [Assign(inv_jac, 1./j)]
+        map_stmts += [Assign(det_jac_bnd, j)]
+        map_stmts += [Assign(inv_jac_bnd, 1./j)]
 
     for i in range(0, dim):
         body += [Assign(vector[i], values[i])]
@@ -657,7 +669,7 @@ def compute_normal_vector(vector, discrete_boundary, mapping):
     return map_stmts, body
 
 #==============================================================================
-def compute_tangent_vector(vector, discrete_boundary, mapping):
+def compute_tangent_vector(vector, boundary, mapping):
     raise NotImplementedError('TODO')
 
 
@@ -771,11 +783,7 @@ def variables(names, dtype, **args):
     else:
         raise TypeError('Expecting a string')
 
-
-
-
-
-
+#=========================================================================================
 def build_pythran_types_header(name, args, order=None):
     """
     builds a types decorator from a list of arguments (of FunctionDef)

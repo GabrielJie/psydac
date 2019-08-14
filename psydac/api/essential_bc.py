@@ -23,7 +23,7 @@ def apply_essential_bc_1d_StencilVector(V, bc, a):
         a[V.nbasis-1-order] = 0.
 
 #==============================================================================
-def apply_essential_bc_1d_StencilMatrix(V, bc, a):
+def apply_essential_bc_1d_StencilMatrix(V, bc, a, identity=False):
     """ Apply homogeneous dirichlet boundary conditions in 1D """
 
     # assumes a 1D spline space
@@ -34,9 +34,15 @@ def apply_essential_bc_1d_StencilMatrix(V, bc, a):
 
     if bc.boundary.ext == -1:
         a[ 0+order,:] = 0.
+        
+        if identity:
+            a[0+order,0] = 1.
 
     if bc.boundary.ext == 1:
         a[-1-order,:] = 0.
+        
+        if identity:
+            a[-1-order,0] = 1.
 
 #==============================================================================
 def apply_essential_bc_2d_StencilVector(V, bc, a):
@@ -57,7 +63,7 @@ def apply_essential_bc_2d_StencilVector(V, bc, a):
         # left  bc.boundary.at x=0.
         if s1 == 0 and bc.boundary.ext == -1:
             a[0+order,:] = 0.
-
+                
         # right bc.boundary.at x=1.
         if e1 == V1.nbasis-1 and bc.boundary.ext == 1:
             a [e1-order,:] = 0.
@@ -72,9 +78,8 @@ def apply_essential_bc_2d_StencilVector(V, bc, a):
             a [:,e2-order] = 0.
 
 #==============================================================================
-def apply_essential_bc_2d_StencilMatrix(V, bc, a):
+def apply_essential_bc_2d_StencilMatrix(V, bc, a, identity=False):
     """ Apply homogeneous dirichlet boundary conditions in 2D """
-
     # assumes a 2D Tensor space
     # add asserts on the space if it is periodic
 
@@ -90,19 +95,31 @@ def apply_essential_bc_2d_StencilMatrix(V, bc, a):
         # left  bc.boundary.at x=0.
         if s1 == 0 and bc.boundary.ext == -1:
             a[0+order,:,:,:] = 0.
+            
+            if identity:
+                a[0+order,:,0,0] = 1.
 
         # right bc.boundary.at x=1.
         if e1 == V1.nbasis-1 and bc.boundary.ext == 1:
             a[e1-order,:,:,:] = 0.
+            
+            if identity:
+                a[e1-order,:,0,0] = 1.
 
     if bc.boundary.axis == 1:
         # lower bc.boundary.at y=0.
         if s2 == 0 and bc.boundary.ext == -1:
             a[:,0+order,:,:] = 0.
 
+            if identity:
+                a[:,0+order,0,0] = 1.
+
         # upper bc.boundary.at y=1.
         if e2 == V2.nbasis-1 and bc.boundary.ext == 1:
             a[:,e2-order,:,:] = 0.
+            
+            if identity:
+                a[:,e2-order,0,0] = 1.
 
 
 
@@ -149,7 +166,7 @@ def apply_essential_bc_3d_StencilVector(V, bc, a):
             a [:,:,e3-order] = 0.
 
 #==============================================================================
-def apply_essential_bc_3d_StencilMatrix(V, bc, a):
+def apply_essential_bc_3d_StencilMatrix(V, bc, a, identity=False):
     """ Apply homogeneous dirichlet boundary conditions in 3D """
 
     # assumes a 3D Tensor space
@@ -167,34 +184,54 @@ def apply_essential_bc_3d_StencilMatrix(V, bc, a):
         # left  bc at x=0.
         if s1 == 0 and bc.boundary.ext == -1:
             a[0+order,:,:,:,:,:] = 0.
+            
+            if identity:
+                a[0+order,:,:,0,0,0] = 1.
+                
 
         # right bc at x=1.
         if e1 == V1.nbasis-1 and bc.boundary.ext == 1:
             a[e1-order,:,:,:,:,:] = 0.
+           
+            if identity:
+                a[e1-order,:,:,0,0,0] = 1.
 
     if bc.boundary.axis == 1:
         # lower bc at y=0.
         if s2 == 0 and bc.boundary.ext == -1:
             a[:,0+order,:,:,:,:] = 0.
 
+            if identity:
+                a[:,0+order,:,0,0,0] = 1.
+
         # upper bc at y=1.
         if e2 == V2.nbasis-1 and bc.boundary.ext == 1:
             a[:,e2-order,:,:,:,:] = 0.
+            
+            if identity:
+                a[:,e2-order,:,0,0,0] = 1.
 
     if bc.boundary.axis == 2:
         # lower bc at z=0.
         if s3 == 0 and bc.boundary.ext == -1:
             a[:,:,0+order,:,:,:] = 0.
 
+            if identity:
+                a[:,:,0+order,0,0,0] = 1.
+
         # upper bc at z=1.
         if e3 == V3.nbasis-1 and bc.boundary.ext == 1:
             a[:,:,e3-order,:,:,:] = 0.
 
+            if identity:
+                a[:,:,e3-order,0,0,0] = 1.
 
 #==============================================================================
 # V is a ProductFemSpace here
-def apply_essential_bc_BlockMatrix(V, bc, a):
+def apply_essential_bc_BlockMatrix(V, bc, a, identity=False):
     """ Apply homogeneous dirichlet boundary conditions in nD """
+
+    identity_cp = identity
 
     if bc.index_component:
         keys = list(a._blocks.keys())
@@ -202,10 +239,12 @@ def apply_essential_bc_BlockMatrix(V, bc, a):
             i = bc.position + i_loc
             js = [ij[1] for ij in keys if ij[0] == i]
             for j in js:
+                
                 M = a[i,j]
-
                 W = V.spaces[i]
-                apply_essential_bc(W, bc, M)
+                identity = identity and i==j
+                apply_essential_bc(W, bc, M , identity=identity)
+                identity = identity_cp
 
 
 #==============================================================================
@@ -216,7 +255,6 @@ def apply_essential_bc_BlockVector(V, bc, a):
     if bc.index_component:
         for i_loc in bc.index_component:
             i = bc.position + i_loc
-
             M = a[i]
             W = V.spaces[i]
             apply_essential_bc(W, bc, M)

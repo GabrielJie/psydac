@@ -11,7 +11,7 @@ from collections import namedtuple
 from pyccel.ast import Nil
 from pyccel.epyccel import get_source_function
 
-from sympde.topology import Domain, Boundary
+from sympde.topology import Domain, Boundary, Connectivity
 
 
 from psydac.api.ast.fem              import Kernel
@@ -347,7 +347,6 @@ class BasicCodeGen(object):
         # ...
         code = self.dependencies_code
         module_name = 'dependencies_{}'.format(self.tag)
-
         self._dependencies_fname = '{}.py'.format(module_name)
         write_code(self.dependencies_fname, code, folder = self.folder)
         # ...
@@ -535,18 +534,14 @@ class BasicDiscrete(BasicCodeGen):
         # ...
 
         # ...
-        boundary_basis = False
+        boundary_basis = boundary
         if boundary:
-            if not isinstance(boundary, (tuple, list, Boundary)):
+            if not isinstance(boundary, (tuple, list, Boundary, Connectivity)):
                 raise TypeError('> Expecting a tuple, list or Boundary')
 
-            if isinstance(boundary, Boundary):
+            if isinstance(boundary, (Boundary, Connectivity)):
                 if not( boundary is target ):
                     raise ValueError('> Unconsistent boundary with symbolic model')
-
-                boundary = [boundary.axis, boundary.ext]
-                boundary = [boundary]
-                boundary_basis = True # TODO set it to False for Nitch method
 
             # boundary is now a list of boundaries
             # TODO shall we keep it this way? since this is the simplest
@@ -554,6 +549,7 @@ class BasicDiscrete(BasicCodeGen):
         # ...
 
         # ... put back optional args to kwargs
+
         kwargs['target'] = target
         kwargs['boundary'] = boundary
         kwargs['boundary_basis'] = boundary_basis
@@ -602,6 +598,7 @@ class BasicDiscrete(BasicCodeGen):
         backend             = kwargs.pop('backend', PSYDAC_BACKEND_PYTHON)
         discrete_space      = kwargs.pop('discrete_space', None)
         symbolic_space      = kwargs.pop('symbolic_space', None)
+        unique_grid         = kwargs.pop('unique_grid', None)
         comm                = kwargs.pop('comm', None)
 
         if kernel_expr is None:
@@ -612,9 +609,10 @@ class BasicDiscrete(BasicCodeGen):
                          target              = target,
                          mapping             = mapping,
                          is_rational_mapping = is_rational_mapping,
-                         discrete_boundary   = boundary,
+                         boundary            = boundary,
                          boundary_basis      = boundary_basis,
                          symbolic_space      = symbolic_space,
+                         unique_grid         = unique_grid,
                          backend = backend )
 
         assembly = Assembly( kernel,

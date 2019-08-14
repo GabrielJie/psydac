@@ -10,6 +10,7 @@ from psydac.fem.splines            import SplineSpace
 from psydac.fem.tensor             import TensorFemSpace
 from psydac.fem.vector             import ProductFemSpace
 from psydac.fem.grid               import FemAssemblyGrid
+from psydac.core.bsplines          import basis_ders_on_quad_grid
 
 #==============================================================================
 def _compute_quadrature_SplineSpace( V, quad_order=None ):
@@ -158,9 +159,16 @@ class QuadratureGrid():
 #==============================================================================
 class BoundaryQuadratureGrid(QuadratureGrid):
     def __init__( self, V, axis, ext, quad_order=None ):
-        assert( not( isinstance(V, ProductFemSpace) ) )
+
+        if isinstance(V, ProductFemSpace):
+            quad_order = np.array([v.degree for v in V.spaces])
+            quad_order = tuple(quad_order.max(axis=0))
+            V = V.spaces[0]
 
         QuadratureGrid.__init__( self, V, quad_order=quad_order )
+        
+        self._axis = axis
+        self._ext  = ext
 
         points     = self.points
         weights    = self.weights
@@ -186,9 +194,16 @@ class BoundaryQuadratureGrid(QuadratureGrid):
             points[axis]     = np.asarray([[bounds[ext]]])
             weights[axis]    = np.asarray([[1.]])
         # ...
-
         self._points     = points
         self._weights    = weights
+    
+    @property
+    def axis(self):
+        return self._axis
+        
+    @property
+    def ext(self):
+        return self._ext
 
 
 #==============================================================================
@@ -227,22 +242,35 @@ def create_fem_assembly_grid(V, quad_order=None, nderiv=1):
 
 #==============================================================================
 class BasisValues():
-    def __init__( self, V, grid, nderiv ):
-        assert( isinstance( grid, QuadratureGrid ) )
+    def __init__( self, V, grids, nderiv ):
+        assert( isinstance( grids, (list,tuple) ) )
+        for grid in grids:
+            assert isinstance(grid, QuadratureGrid)
 
+        assert len(V) == len(grids)
+
+            
+        self._spans = []
+        self._basis = []
         # TODO quad_order in FemAssemblyGrid must be be the order and not the
         # degree
-        quad_order = [q-1 for q in grid.quad_order]
-        global_quad_grid = create_fem_assembly_grid( V,
-                                              quad_order=quad_order,
-                                              nderiv=nderiv )
+        
+        for grid,space in zip(grids, V):
+            quad_order = [q-1 for q in grid.quad_order]
+        
+            quad_grid = create_fem_assembly_grid( space,
+                        quad_order=quad_order,nderiv=nderiv )
 
-        if isinstance(V, ProductFemSpace):
-            self._spans = [[g.spans for g in quad_grid] for quad_grid in global_quad_grid]
-            self._basis = [[g.basis for g in quad_grid] for quad_grid in global_quad_grid]
-        else:
-            self._spans = [g.spans for g in global_quad_grid]
-            self._basis = [g.basis for g in global_quad_grid]
+            self._spans += [[g.spans for g in quad_grid]]
+            self._basis += [[g.basis for g in quad_grid]] 
+            
+            if isinstance(grid, BoundaryQuadratureGrid):
+                axis = grid.axis
+                ext  = grid.ext
+                sp_space = space.spaces[axis]
+                points = grid.points[axis]
+                boundary_basis = basis_ders_on_quad_grid(sp_space.knots, sp_space.degree, points, nderiv)
+                self._basis[-1][axis][0:1,:,:,0:1] = boundary_basis
             
     @property
     def basis(self):

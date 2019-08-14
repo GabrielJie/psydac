@@ -16,10 +16,10 @@ from sympde.expr     import BilinearForm as sym_BilinearForm
 from sympde.expr     import LinearForm as sym_LinearForm
 from sympde.expr     import Functional as sym_Functional
 from sympde.expr     import Equation as sym_Equation
-from sympde.expr     import Boundary as sym_Boundary
+from sympde.expr     import Boundary as sym_Boundary, Connectivity as sym_Connectivity
 from sympde.expr     import Norm as sym_Norm
 from sympde.expr     import TerminalExpr
-from sympde.topology import Domain, Boundary
+from sympde.topology import Domain, Boundary, InteriorDomain
 from sympde.topology import Line, Square, Cube
 from sympde.topology import BasicFunctionSpace
 from sympde.topology import ScalarFunctionSpace, VectorFunctionSpace, Derham
@@ -106,14 +106,15 @@ class DiscreteEquation(BasicDiscrete):
         # ...
 
         # ...
-        boundaries_lhs = expr.lhs.atoms(sym_Boundary)
+        boundaries_lhs = expr.lhs.atoms(sym_Boundary,sym_Connectivity)
         boundaries_lhs = list(boundaries_lhs)
 
-        boundaries_rhs = expr.rhs.atoms(sym_Boundary)
+        boundaries_rhs = expr.rhs.atoms(sym_Boundary, sym_Connectivity)
         boundaries_rhs = list(boundaries_rhs)
         # ...
 
         # ...
+
         kwargs['boundary'] = None
         if boundaries_lhs:
             kwargs['boundary'] = boundaries_lhs
@@ -170,12 +171,13 @@ class DiscreteEquation(BasicDiscrete):
     def assemble(self, **kwargs):
         assemble_lhs = kwargs.pop('assemble_lhs', True)
         assemble_rhs = kwargs.pop('assemble_rhs', True)
+        identity     = kwargs.pop('identity_bd', 'True')
         if assemble_lhs:
             M = self.lhs.assemble(**kwargs)
             if self.bc:
                 # TODO change it: now apply_bc can be called on a list/tuple
                 for bc in self.bc:
-                    apply_essential_bc(self.test_space, bc, M)
+                    apply_essential_bc(self.test_space, bc, M, identity=identity)
         else:
             M = self.linear_system.lhs
 
@@ -327,6 +329,16 @@ def discretize_space(V, domain_h, *args, **kwargs):
     kind             = V.kind
     ldim             = V.ldim
     
+    xmin             = kwargs.pop('xmin',[0.]*ldim)
+    xmax             = kwargs.pop('xmax',[1.]*ldim)
+    
+    
+    if xmin == [0.]*ldim and xmax == [1.]*ldim:
+        unique_grid = True
+    else:
+        unique_grid = False
+    
+    
     if isinstance(V, ProductSpace):
         kwargs['normalize'] = normalize
         normalize = False
@@ -357,7 +369,7 @@ def discretize_space(V, domain_h, *args, **kwargs):
         assert( len(degree) == ldim )
 
         # Create uniform grid
-        grids = [np.linspace( 0., 1., num=ne+1 ) for ne in ncells]
+        grids = [np.linspace( s, e, num=ne+1 ) for s,e,ne in zip(xmin,xmax,ncells)]
 
         # Create 1D finite element spaces and precompute quadrature data
         spaces = [SplineSpace( p, grid=grid ) for p,grid in zip(degree, grids)]
@@ -417,7 +429,8 @@ def discretize_space(V, domain_h, *args, **kwargs):
 
     # add symbolic_mapping as a member to the space object
     setattr(Vh, 'symbolic_mapping', symbolic_mapping)
-    
+    setattr(Vh, 'symbolic_space', V)
+    setattr(Vh, 'unique_grid', unique_grid)
 
     return Vh
 
@@ -483,7 +496,7 @@ def discretize(a, *args, **kwargs):
     elif isinstance(a, Derham):
         return discretize_derham(a, *args, **kwargs)
 
-    elif isinstance(a, Domain):
+    elif isinstance(a, (Domain, InteriorDomain)):
         return discretize_domain(a, *args, **kwargs)
 
     elif isinstance(a, sym_GltExpr):
