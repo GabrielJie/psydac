@@ -39,7 +39,6 @@ from pyccel.ast.utilities import build_types_decorator
 
 from sympde.core import Cross_3d
 from sympde.core import Constant
-from sympde.core.math import math_atoms_as_str
 from sympde.calculus import grad
 from sympde.topology import Mapping
 from sympde.topology import ScalarField
@@ -71,14 +70,13 @@ from .utilities import build_pythran_types_header, variables
 from .utilities import filter_loops, filter_product, select_loops
 from .utilities import rationalize_eval_mapping
 from .utilities import compute_atoms_expr_mapping
-from .utilities import compute_atoms_expr_vector_field
 from .utilities import compute_atoms_expr_field
 
 
 #==============================================================================
 class EvalQuadratureMapping(SplBasic):
 
-    def __new__(cls, space, mapping, discrete_boundary=None, name=None,
+    def __new__(cls, space, mapping, boundary=None, name=None,
                 boundary_basis=None, nderiv=1, is_rational_mapping=None,
                 area=None, backend=None):
 
@@ -90,7 +88,7 @@ class EvalQuadratureMapping(SplBasic):
                                is_rational_mapping=is_rational_mapping)
 
         obj._space = space
-        obj._discrete_boundary = discrete_boundary
+        obj._boundary = boundary
         obj._boundary_basis = boundary_basis
         obj._backend = backend
 
@@ -288,7 +286,7 @@ class EvalQuadratureMapping(SplBasic):
         # ...
 
         # put the body in tests for loops
-        body = select_loops(indices_basis, ranges_basis, body, discrete_boundary=None)
+        body = select_loops(indices_basis, ranges_basis, body, boundary=None)
 
         if self.is_rational_mapping:
             stmts = rationalize_eval_mapping(self.mapping, self.nderiv,
@@ -298,7 +296,7 @@ class EvalQuadratureMapping(SplBasic):
 
         # ...
         if self.area:
-            weight = filter_product(indices_quad, weights, self.discrete_boundary)
+            weight = filter_product(indices_quad, weights, self.boundary)
 
             stmts = area_eval_mapping(self.mapping, self.area, dim, indices_quad, weight)
 
@@ -307,7 +305,7 @@ class EvalQuadratureMapping(SplBasic):
 
         # put the body in for loops of quadrature points
         body = filter_loops(indices_quad, ranges_quad, body,
-                            self.discrete_boundary,
+                            self.boundary,
                             boundary_basis=self.boundary_basis)
 
         # initialization of the matrix
@@ -341,7 +339,7 @@ class EvalQuadratureMapping(SplBasic):
 #==============================================================================
 class EvalQuadratureField(SplBasic):
 
-    def __new__(cls, space, fields, discrete_boundary=None, name=None,
+    def __new__(cls, space, fields, boundary=None, name=None,
                 boundary_basis=None, mapping=None, is_rational_mapping=None,backend=None):
 
         if not isinstance(fields, (tuple, list, Tuple)):
@@ -353,7 +351,7 @@ class EvalQuadratureField(SplBasic):
 
         obj._space = space
         obj._fields = Tuple(*fields)
-        obj._discrete_boundary = discrete_boundary
+        obj._boundary = boundary
         obj._boundary_basis = boundary_basis
         obj._backend = backend
         obj._func = obj._initialize()
@@ -443,13 +441,13 @@ class EvalQuadratureField(SplBasic):
 
         # put the body in tests for loops
         body = filter_loops(indices_basis, ranges_basis, body,
-                            self.discrete_boundary,
+                            self.boundary,
                             boundary_basis=self.boundary_basis)
 
 
         # put the body in for loops of quadrature points
         body = filter_loops(indices_quad, ranges_quad, body,
-                            self.discrete_boundary,
+                            self.boundary,
                             boundary_basis=self.boundary_basis)
 
 
@@ -477,7 +475,7 @@ class EvalQuadratureField(SplBasic):
 #==============================================================================
 class EvalQuadratureVectorField(SplBasic):
 
-    def __new__(cls, space, vector_fields, discrete_boundary=None, name=None,
+    def __new__(cls, space, vector_fields, boundary=None, name=None,
                 boundary_basis=None, mapping=None, is_rational_mapping=None, backend = None):
 
         if not isinstance(vector_fields, (tuple, list, Tuple)):
@@ -489,7 +487,7 @@ class EvalQuadratureVectorField(SplBasic):
 
         obj._space = space
         obj._vector_fields = Tuple(*vector_fields)
-        obj._discrete_boundary = discrete_boundary
+        obj._boundary = boundary
         obj._boundary_basis = boundary_basis
         obj._backend = backend
         obj._func = obj._initialize()
@@ -560,9 +558,8 @@ class EvalQuadratureVectorField(SplBasic):
         init_map   = OrderedDict()
         updates = []
         for atom in self.vector_fields:
-            init, update, map_stmts = compute_atoms_expr_vector_field(atom, indices_quad, indices_basis,
-                                                                      basis, Nj,
-                                                                      mapping=mapping)
+            init, update, map_stmts = compute_atoms_expr_field(atom, indices_quad, indices_basis,
+                                                               basis, Nj, mapping=mapping)
 
             updates.append(update)
 
@@ -579,12 +576,12 @@ class EvalQuadratureVectorField(SplBasic):
 
         # put the body in tests for loops
         body = filter_loops(indices_basis, ranges_basis, body,
-                            self.discrete_boundary,
+                            self.boundary,
                             boundary_basis=self.boundary_basis)
 
         # put the body in for loops of quadrature points
         body = filter_loops(indices_quad, ranges_quad, body,
-                            self.discrete_boundary,
+                            self.boundary,
                             boundary_basis=self.boundary_basis)
 
         # initialization of the matrix
@@ -627,7 +624,7 @@ def _create_loop(indices, ranges, body):
 #==============================================================================
 class EvalArrayField(SplBasic):
 
-    def __new__(cls, space, fields, discrete_boundary=None, name=None,
+    def __new__(cls, space, fields, boundary=None, name=None,
                 boundary_basis=None, mapping=None, is_rational_mapping=None,backend=None):
 
         if not isinstance(fields, (tuple, list, Tuple)):
@@ -639,7 +636,7 @@ class EvalArrayField(SplBasic):
 
         obj._space = space
         obj._fields = Tuple(*fields)
-        obj._discrete_boundary = discrete_boundary
+        obj._boundary = boundary
         obj._boundary_basis = boundary_basis
         obj._backend = backend
         obj._func = obj._initialize()
@@ -720,8 +717,7 @@ class EvalArrayField(SplBasic):
         init_map   = OrderedDict()
         for atom in self.fields:
             init, update, map_stmts = compute_atoms_expr_field(atom, indices_quad, indices_basis,
-                                                               basis, Nj,
-                                                               mapping=mapping)
+                                                               basis, Nj, mapping=mapping)
 
             updates.append(update)
 

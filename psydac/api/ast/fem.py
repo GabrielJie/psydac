@@ -38,7 +38,6 @@ from pyccel.ast.utilities import build_types_decorator
 
 from sympde.core import Cross_3d
 from sympde.core import Constant
-from sympde.core.math import math_atoms_as_str
 from sympde.calculus import grad
 from sympde.topology import Mapping
 from sympde.topology import ScalarField
@@ -48,7 +47,7 @@ from sympde.topology import Covariant, Contravariant
 from sympde.topology import ElementArea
 from sympde.topology import LogicalExpr
 from sympde.topology import SymbolicExpr
-from sympde.topology import UndefinedSpaceType
+from sympde.topology import UndefinedSpaceType,H1SpaceType
 from sympde.topology.derivatives import _partial_derivatives
 from sympde.topology.derivatives import _logical_partial_derivatives
 from sympde.topology.derivatives import get_max_partial_derivatives
@@ -73,12 +72,9 @@ from .utilities import random_string
 from .utilities import build_pythran_types_header, variables
 from .utilities import compute_normal_vector, compute_tangent_vector
 from .utilities import select_loops, filter_product
-from .utilities import rationalize_eval_mapping
-from .utilities import compute_atoms_expr_mapping
-from .utilities import compute_atoms_expr_vector_field
-from .utilities import compute_atoms_expr_field
 from .utilities import compute_atoms_expr
-from .utilities import is_vector_field, is_field
+from .utilities import is_scalar_field, is_vector_field
+from .utilities import math_atoms_as_str
 
 
 FunctionalForms = (BilinearForm, LinearForm, Functional)
@@ -278,8 +274,7 @@ class Kernel(SplBasic):
             space = spaces[0]
             unique_scalar_space = all(sp.kind==space.kind for sp in spaces)
         elif isinstance(symbolic_space, VectorFunctionSpace):
-            unique_scalar_space = isinstance(symbolic_space.kind, UndefinedSpaceType)
-
+            unique_scalar_space = isinstance(symbolic_space.kind, (UndefinedSpaceType, H1SpaceType))
         # ...
         # get the target expr if there are multiple expressions (domain/boundary)
         on_boundary = False
@@ -552,7 +547,7 @@ class Kernel(SplBasic):
         # ...
 
         # ...
-        atomic_expr_field        = [atom for atom in atoms if is_field(atom)]
+        atomic_expr_field        = [atom for atom in atoms if is_scalar_field(atom)]
         atomic_expr_vector_field = [atom for atom in atoms if is_vector_field(atom)]
 
         atomic_expr       = [atom for atom in atoms if not( atom in atomic_expr_field ) and
@@ -852,7 +847,7 @@ class Kernel(SplBasic):
 
         for indx in range(ln):
 
-            if not unique_scalar_space  or not unique_grid and indx in zero_terms:
+            if (not unique_scalar_space  or not unique_grid) and indx in zero_terms:
                 continue
 
             elif not unique_scalar_space or not unique_grid:
@@ -1100,10 +1095,8 @@ class Kernel(SplBasic):
             body = len_quads + body
 
             # get math functions and constants
-            math_elements = math_atoms_as_str(self.kernel_expr)
-            math_imports = []
-            for e in math_elements:
-                math_imports += [Import(e, 'numpy')]
+            math_elements = math_atoms_as_str(self.kernel_expr, 'numpy')
+            math_imports  = [Import(e, 'numpy') for e in math_elements]
 
             imports += math_imports
             self._imports = imports
@@ -1235,20 +1228,12 @@ class Assembly(SplBasic):
 
 
         if is_bilinear:
-
             Wh = self.discrete_space[0]
             Vh = self.discrete_space[1]
             is_product_space = isinstance(Wh, ProductFemSpace)
-            ln = 1
-            if is_product_space:
-                ln = len(Wh.spaces)
         else:
-
             Wh = self.discrete_space
-            ln = 1
-            is_product_space = isinstance(self.discrete_space, ProductFemSpace)
-            if is_product_space:
-                ln = len(self.discrete_space.spaces)
+            is_product_space = isinstance(Wh, ProductFemSpace)
 
         unique_scalar_space = kernel.unique_scalar_space
         unique_grid         = Wh.unique_grid
@@ -1346,7 +1331,7 @@ class Assembly(SplBasic):
         test_basis     = variables('test_basis_1:%s(1:%s)'%(dim+1,ln+1), dtype='real', rank=4, cls=IndexedVariable)
 
         spans          = variables('test_spans_1:%s(1:%s)'%(dim+1,ln+1), dtype='int', rank=1, cls=IndexedVariable)
-        quad_orders    = variables( 'k1:%s(1:%s)'%(dim+1,grids_len), dtype='int')
+        quad_orders    = variables( 'k1:%s(1:%s)'%(dim+1,grids_len+1), dtype='int')
 
         trial_basis_in_elm = variables('trial_bs1:%s(1:%s)'%(dim+1,ln+1), dtype='real', rank=3, cls=IndexedVariable)
         test_basis_in_elm  = variables('test_bs1:%s(1:%s)'%(dim+1,ln+1), dtype='real', rank=3, cls=IndexedVariable)
@@ -1531,14 +1516,13 @@ class Assembly(SplBasic):
                     args = kernel.build_arguments(f_coeffs + vf_coeffs + m_coeffs + (M,))
                     args = list(args)
                     funcs = kernel.func[i][j]
-                    if grids_len == 1:
+                    if unique_scalar_space and grids_len == 1:
                         i,j = 0,0
                     args[:dim] = test_degrees[i::ln]
                     args[dim:2*dim] = trial_degrees[j::ln]
                     args[2*dim:3*dim] = pads
                     args[3*dim:4*dim] = test_basis_in_elm[i::ln]
                     args[4*dim:5*dim] = trial_basis_in_elm[j::ln]
-                    
                     body += [FunctionCall(funcs, args)]
 
             else:
@@ -1665,11 +1649,6 @@ class Assembly(SplBasic):
         # allocate element matrices
 
         for (i,j),mat in element_matrices.items():
-            
-            if is_bilinear:
-                if not unique_scalar_space:
-                    spads = [2*max(pi,pj)+1 for pi,pj in zip(Vh.spaces[i].degree,Wh.spaces[j].degree)]
-
 
             if is_bilinear and len(trial_space_indices) == 1:
                 j = 0
@@ -1681,6 +1660,10 @@ class Assembly(SplBasic):
             orders  = [p+1 for p in test_degrees[i::ln]]
             spads   = [2*p+1 for p in test_pads[j::ln]]
             
+            if is_bilinear:
+                if not unique_scalar_space:
+                    spads = [2*max(pi,pj)+1 for pi,pj in zip(Vh.spaces[i].degree,Wh.spaces[j].degree)]
+
             if is_bilinear:
                 args  = tuple(orders + spads)
 
@@ -2049,10 +2032,14 @@ class Interface(SplBasic):
                 body += [Assign(trial_degrees, Vh.degree)]
                 body += [Assign(trial_pads   , Vh.vector_space.pads)]
             
-
-        body += [Assign(starts, DottedName(test_spaces[0], 'starts'))]
-        body += [Assign(ends,   DottedName(test_spaces[0], 'ends'))]
-        body += [Assign(npts,   DottedName(test_spaces[0], 'npts'))]
+        if is_product_fem_space:
+            body += [Assign(starts, DottedName(test_spaces[0], 'starts'))]
+            body += [Assign(ends,   DottedName(test_spaces[0], 'ends'))]
+            body += [Assign(npts,   DottedName(test_spaces[0], 'npts'))]
+        else:
+            body += [Assign(starts, DottedName(test_spaces, 'starts'))]
+            body += [Assign(ends,   DottedName(test_spaces, 'ends'))]
+            body += [Assign(npts,   DottedName(test_spaces, 'npts'))]
         # ...
         if mapping:
             # we limit the range to dim, since the last element can be the

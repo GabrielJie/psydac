@@ -7,9 +7,9 @@ from sympde.core import Constant
 from sympde.calculus import grad, dot, inner, cross, rot, curl, div
 from sympde.calculus import laplace, hessian
 from sympde.topology import (dx, dy, dz)
-from sympde.topology import FunctionSpace, VectorFunctionSpace
+from sympde.topology import ScalarFunctionSpace, VectorFunctionSpace
 from sympde.topology import ProductSpace
-from sympde.topology import element_of_space
+from sympde.topology import element_of
 from sympde.topology import Boundary, NormalVector, TangentVector
 from sympde.topology import Domain, Line, Square, Cube, two_patches_Square
 from sympde.topology import Trace, trace_0, trace_1
@@ -42,16 +42,16 @@ def run_laplace_2d_nitsche_dir(solution, f, ncells, degree, s, kappa, comm=None)
     # ... abstract model
     domain = Square()
 
-    V = FunctionSpace('V', domain)
+    V = ScalarFunctionSpace('V', domain)
 
     B = domain.boundary
 
     x,y = domain.coordinates
 
-    F = element_of_space(V, name='F')
+    F = element_of(V, name='F')
 
-    v = element_of_space(V, name='v')
-    u = element_of_space(V, name='u')
+    v = element_of(V, name='v')
+    u = element_of(V, name='u')
 
     a0  = BilinearForm((u,v), dot(grad(v),grad(u)))
     
@@ -122,17 +122,17 @@ def run_maxwell_2d_nitsche_dir(solution, f, ncells, degree, s, kappa, mu, comm=N
 
     B = domain.boundary
 
-    V = VectorFunctionSpace('V', domain,kind='hcurl')
+    V = VectorFunctionSpace('V', domain,kind='h1')
     
     nn = NormalVector('nn')
 
-    F = element_of_space(V, name='F')
+    F = element_of(V, name='F')
     
     error    = Tuple(F[0]-solution[0], F[1]-solution[1])
     l2norm  = Norm(error, domain, kind='l2')
     h1norm  = Norm(error, domain, kind='h1')
 
-    E,P = [element_of_space(V, name=i) for i in ['E', 'P']]
+    E,P = [element_of(V, name=i) for i in ['E', 'P']]
 
     a0  = BilinearForm((E,P), curl(E)*curl(P) + mu*dot(E,P))
 
@@ -195,8 +195,8 @@ def run_laplace_2d_2_patchs_nitsche_dir(solution, f, ncells, degree, kappa, comm
     domain1 = domain.interior.args[0]
     domain2 = domain.interior.args[1]
 
-    V1 = FunctionSpace('V1', domain1)
-    V2 = FunctionSpace('V2', domain2)
+    V1 = ScalarFunctionSpace('V1', domain1)
+    V2 = ScalarFunctionSpace('V2', domain2)
 
     B = domain.connectivity
     B1 = list(B._data.values())[0][0]
@@ -205,11 +205,11 @@ def run_laplace_2d_2_patchs_nitsche_dir(solution, f, ncells, degree, kappa, comm
     bd1 = Union(*domain.boundary.args[::2]) 
     bd2 = Union(*domain.boundary.args[1::2])
 
-    v1 = element_of_space(V1, name='v1')
-    u1 = element_of_space(V1, name='u1')
+    v1 = element_of(V1, name='v1')
+    u1 = element_of(V1, name='u1')
 
-    v2 = element_of_space(V2, name='v2')
-    u2 = element_of_space(V2, name='u2')
+    v2 = element_of(V2, name='v2')
+    u2 = element_of(V2, name='u2')
 
     a0  = BilinearForm(((u1,u2),(v1,v2)), dot(grad(v1),grad(u1)) + dot(grad(v2),grad(u2)))
 
@@ -356,7 +356,7 @@ def test_api_maxwell_2d_nitsche_dir():
     f        = solution
     
     l2_error, h1_error = run_maxwell_2d_nitsche_dir(solution, f, ncells=[2**5,2**5], 
-                                                    degree=[2,2], s=1, kappa=10**20, mu=mu)
+                                                    degree=[2,2], s=1, kappa=10**15, mu=mu)
 
     expected_l2_error =  0.0003460526398200829
     expected_h1_error =  0.034239942968633204
@@ -386,7 +386,6 @@ def teardown_module():
 def teardown_function():
     from sympy import cache
     cache.clear_cache()
-    
-teardown_function()
-test_api_2_patchs_2d_nitsche_dir()
 
+teardown_module()
+test_api_maxwell_2d_nitsche_dir()

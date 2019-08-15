@@ -58,10 +58,10 @@ def is_mapping(expr):
     return False
 
 #==============================================================================
-def is_field(expr):
+def is_scalar_field(expr):
 
     if isinstance(expr, _partial_derivatives):
-        return is_field(expr.args[0])
+        return is_scalar_field(expr.args[0])
 
     elif isinstance(expr, ScalarField):
         return True
@@ -78,6 +78,8 @@ def is_vector_field(expr):
         return True
 
     return False
+
+#==============================================================================
 
 def logical2physical(expr):
 
@@ -156,21 +158,10 @@ def compute_atoms_expr(atomic_exprs, indices_quad, indices_test,
 
     assigns = []
     for atom in atomic_exprs:
-        
-        p_indices = get_index_derivatives(atom)
-        orders = [0 for i in range(0, dim)]
 
-        if isinstance(atom, _partial_derivatives):
-            a = get_atom_derivatives(atom)
-            atom_name = _get_name(a)
-
-            orders[atom.grad_index] = p_indices[atom.coordinate]
-
-        else:
-            atom_name = _get_name(atom)
-
-        test_names = [_get_name(i) for i in test_function]
-        test = atom_name in test_names
+        orders = [*get_index_derivatives(atom).values()]
+        a      = get_atom_derivatives(atom)
+        test   = _get_name(a) in [_get_name(f) for f in test_function]
 
         if test or is_linear:
             basis  = basis_test
@@ -191,110 +182,41 @@ def compute_atoms_expr(atomic_exprs, indices_quad, indices_test,
     # ...
     return assigns, map_stmts
 
-
 #==============================================================================
 def compute_atoms_expr_field(atom, indices_quad,
                             idxs, basis,
                             test_function, mapping):
 
-    if not is_field(atom):
-        raise TypeError('atom must be a field expr')
+    if is_scalar_field(atom):
+        field      = list(atom.atoms(ScalarField))[0]
+        field_name = 'coeff_' + print_expression(field)
+        base       = field
 
-    field = list(atom.atoms(ScalarField))[0]
-    field_name = 'coeff_'+str(field.name)
-
-    # ...
-    if isinstance(atom, _partial_derivatives):
-        direction = atom.grad_index + 1
-
-    else:
-        direction = 0
-    # ...
-
-    # ...
-    test_function = atom.subs(field, test_function)
-    name = print_expression(test_function)
-    test_function = Symbol(name)
-    # ...
-
-    # ...
-    args = []
-    dim  = len(idxs)
-    for i in range(dim):
-        if direction == i+1:
-            args.append(basis[i][idxs[i],1,indices_quad[i]])
-
-        else:
-            args.append(basis[i][idxs[i],0,indices_quad[i]])
-
-    init = Assign(test_function, Mul(*args))
-    # ...
-
-    # ...
-    args = [IndexedBase(field_name)[idxs], test_function]
-
-    val_name = print_expression(atom) + '_values'
-    val  = IndexedBase(val_name)[indices_quad]
-    update = AugAssign(val,'+',Mul(*args))
-    # ...
-
-    # ... map basis function
-    map_stmts = []
-    if mapping and  isinstance(atom, _partial_derivatives):
-        name = print_expression(atom)
-        rhs = LogicalExpr(mapping, atom)
-        rhs = SymbolicExpr(rhs)
-        map_stmts = [Assign(Symbol(name), rhs)]
-    # ...
-
-    return init, update, map_stmts
-
-
-#==============================================================================
-def compute_atoms_expr_vector_field(atom, indices_quad,
-                            idxs, basis,
-                            test_function, mapping):
-
-    if not is_vector_field(atom):
-        raise TypeError('atom must be a vector field expr')
-
-
-    vector_field = atom
-    vector_field_name = 'coeff_' + print_expression(get_atom_derivatives(atom))
-
-    # ...
-    if isinstance(atom, _partial_derivatives):
-        direction = atom.grad_index + 1
+    elif is_vector_field(atom):
+        field      = list(atom.atoms(IndexedVectorField))[0]
+        field_name = 'coeff_' + print_expression(field)
+        base       = field.base
 
     else:
-        direction = 0
-    # ...
+        raise TypeError('atom must be either scalar or vector field')
 
     # ...
-    base = list(atom.atoms(VectorField))[0]
     test_function = atom.subs(base, test_function)
-    name = print_expression(test_function)
+    name          = print_expression(test_function)
     test_function = Symbol(name)
     # ...
 
     # ...
-    args = []
-    dim  = len(idxs)
-    for i in range(dim):
-        if direction == i+1:
-            args.append(basis[i][idxs[i],1,indices_quad[i]])
-
-        else:
-            args.append(basis[i][idxs[i],0,indices_quad[i]])
-
-    init = Assign(test_function, Mul(*args))
+    orders = [*get_index_derivatives(atom).values()]
+    args   = [b[i, d, q] for b, i, d, q in zip(basis, idxs, orders, indices_quad)]
+    init   = Assign(test_function, Mul(*args))
     # ...
 
     # ...
-    args = [IndexedBase(vector_field_name)[idxs], test_function]
+    args     = [IndexedBase(field_name)[idxs], test_function]
     val_name = print_expression(atom) + '_values'
-    val  = IndexedBase(val_name)[indices_quad]
-    update = AugAssign(val,'+',Mul(*args))
+    val      = IndexedBase(val_name)[indices_quad]
+    update   = AugAssign(val,'+',Mul(*args))
     # ...
 
     # ... map basis function
@@ -308,8 +230,93 @@ def compute_atoms_expr_vector_field(atom, indices_quad,
 
     return init, update, map_stmts
 
+#=============================================================================
+#def compute_atoms_expr_field(atom, indices_quad,
+#                            idxs, basis,
+#                            test_function, mapping):
+#
+#    if not is_field(atom):
+#        raise TypeError('atom must be a field expr')
+#
+#    field = list(atom.atoms(ScalarField))[0]
+#    field_name = 'coeff_'+str(field.name)
+#
+#    # ...
+#    test_function = atom.subs(field, test_function)
+#    name = print_expression(test_function)
+#    test_function = Symbol(name)
+#    # ...
+#
+#    # ...
+#    orders = [*get_index_derivatives(atom).values()]
+#    args   = [b[i, d, q] for b, i, d, q in zip(basis, idxs, orders, indices_quad)]
+#    init   = Assign(test_function, Mul(*args))
+#    # ...
+#
+#    # ...
+#    args = [IndexedBase(field_name)[idxs], test_function]
+#
+#    val_name = print_expression(atom) + '_values'
+#    val  = IndexedBase(val_name)[indices_quad]
+#    update = AugAssign(val,'+',Mul(*args))
+#    # ...
+#
+#    # ... map basis function
+#    map_stmts = []
+#    if mapping and  isinstance(atom, _partial_derivatives):
+#        name = print_expression(atom)
+#        rhs = LogicalExpr(mapping, atom)
+#        rhs = SymbolicExpr(rhs)
+#        map_stmts = [Assign(Symbol(name), rhs)]
+#    # ...
+#
+#    return init, update, map_stmts
+#
+#
+#=============================================================================
+#def compute_atoms_expr_vector_field(atom, indices_quad,
+#                            idxs, basis,
+#                            test_function, mapping):
+#
+#    if not is_vector_field(atom):
+#        raise TypeError('atom must be a vector field expr')
+#
+#    vector_field = atom
+#    vector_field_name = 'coeff_' + print_expression(get_atom_derivatives(atom))
+#
+#    # ...
+#    base = list(atom.atoms(VectorField))[0]
+#    test_function = atom.subs(base, test_function)
+#    name = print_expression(test_function)
+#    test_function = Symbol(name)
+#    # ...
+#
+#    # ...
+#    orders = [*get_index_derivatives(atom).values()]
+#    args   = [b[i, d, q] for b, i, d, q in zip(basis, idxs, orders, indices_quad)]
+#    init   = Assign(test_function, Mul(*args))
+#    # ...
+#
+#    # ...
+#    args = [IndexedBase(vector_field_name)[idxs], test_function]
+#    val_name = print_expression(atom) + '_values'
+#    val  = IndexedBase(val_name)[indices_quad]
+#    update = AugAssign(val,'+',Mul(*args))
+#    # ...
+#
+#    # ... map basis function
+#    map_stmts = []
+#    if mapping and  isinstance(atom, _partial_derivatives):
+#        name = print_expression(atom)
+#        rhs = LogicalExpr(mapping, atom)
+#        rhs = SymbolicExpr(rhs)
+#        map_stmts = [Assign(Symbol(name), rhs)]
+#    # ...
+#
+#    return init, update, map_stmts
 
 #==============================================================================
+# TODO: merge into 'compute_atoms_expr_field'
 def compute_atoms_expr_mapping(atom, indices_quad,
                                idxs, basis,
                                test_function):
@@ -320,30 +327,15 @@ def compute_atoms_expr_mapping(atom, indices_quad,
     element_name = 'coeff_' + _print(element)
 
     # ...
-    if isinstance(atom, _partial_derivatives):
-        direction = atom.grad_index + 1
-
-    else:
-        direction = 0
-    # ...
-
-    # ...
     test_function = atom.subs(element, test_function)
     name = print_expression(test_function, logical=True)
     test_function = Symbol(name)
     # ...
 
     # ...
-    args = []
-    dim  = len(idxs)
-    for i in range(dim):
-        if direction == i+1:
-            args.append(basis[i][idxs[i],1,indices_quad[i]])
-
-        else:
-            args.append(basis[i][idxs[i],0,indices_quad[i]])
-
-    init = Assign(test_function, Mul(*args))
+    orders = [*get_index_derivatives(atom).values()]
+    args   = [b[i, d, q] for b, i, d, q in zip(basis, idxs, orders, indices_quad)]
+    init   = Assign(test_function, Mul(*args))
     # ...
 
     # ...
@@ -783,7 +775,9 @@ def variables(names, dtype, **args):
     else:
         raise TypeError('Expecting a string')
 
-#=========================================================================================
+
+#==============================================================================
+
 def build_pythran_types_header(name, args, order=None):
     """
     builds a types decorator from a list of arguments (of FunctionDef)
@@ -812,3 +806,81 @@ def build_pythran_types_header(name, args, order=None):
     return header
 
 pythran_dtypes = {'real':'float','int':'int'}
+
+#==============================================================================
+
+from sympy import preorder_traversal
+from sympy import Function
+from sympy import NumberSymbol
+from sympy import Pow, S
+from sympy.printing.pycode import _known_functions_math
+from sympy.printing.pycode import _known_constants_math
+from sympy.printing.pycode import _known_functions_mpmath
+from sympy.printing.pycode import _known_constants_mpmath
+from sympy.printing.pycode import _known_functions_numpy
+
+
+def math_atoms_as_str(expr, lib='math'):
+    """
+    Given a Sympy expression, find all known mathematical atoms (functions and
+    constants) that need to be imported from a math library (e.g. Numpy) when
+    generating Python code.
+
+    Parameters
+    ----------
+    expr : sympy.core.expr.Expr
+        Symbolic expression for which Python code is to be generated.
+
+    lib : str
+        Library used to translate symbolic functions/constants into standard
+        Python ones. Options: ['math', 'mpmath', 'numpy']. Default: 'math'.
+
+    Returns
+    -------
+    imports : set of str
+        Set of all names (strings) to be imported.
+
+    """
+
+    # Choose translation dictionaries
+    if lib == 'math':
+        known_functions = _known_functions_math
+        known_constants = _known_constants_math
+    elif lib == 'mpmath':
+        known_functions = _known_functions_mpmath
+        known_constants = _known_constants_mpmath
+    elif lib == 'numpy':
+        known_functions = _known_functions_numpy
+        known_constants = _known_constants_math   # numpy version missing
+    else:
+        raise ValueError("Library {} not supported.".format(mod))
+
+    # Initialize variables
+    math_functions = set()
+    math_constants = set()
+    sqrt = False
+
+    # Walk expression tree
+    for i in preorder_traversal(expr):
+
+        # Search for math functions (e.g. cos, sin, exp, ...)
+        if isinstance(i, Function):
+            s = str(type(i))
+            if s in known_functions:
+                p = known_functions[s]
+                math_functions.add(p)
+
+        # Search for math constants (e.g. pi, e, ...)
+        elif isinstance(i, NumberSymbol):
+            s = type(i).__name__
+            if s in known_constants:
+                p = known_constants[s]
+                math_constants.add(p)
+
+        # Search for square roots
+        elif (not sqrt):
+            if isinstance(i, Pow) and (i.exp is S.Half):
+                math_functions.add('sqrt')
+                sqrt = True
+
+    return set.union(math_functions, math_constants)

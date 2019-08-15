@@ -251,7 +251,6 @@ class DiscreteLinearForm(BasicDiscrete):
                         break        
         else:
             test_space  = [test_space]
-            trial_space = [trial_space]
             
         # ...
         if boundary is None:
@@ -313,7 +312,6 @@ class DiscreteFunctional(BasicDiscrete):
 
         mapping = list(domain_h.mappings.values())[0]
         self._mapping = mapping
-
         is_rational_mapping = False
         if not( mapping is None ):
             is_rational_mapping = isinstance( mapping, NurbsMapping )
@@ -330,26 +328,67 @@ class DiscreteFunctional(BasicDiscrete):
         kwargs['is_rational_mapping'] = is_rational_mapping
         kwargs['comm']                = domain_h.comm
 
+        boundary = kwargs.pop('boundary', [])
+        if boundary and isinstance(boundary, list):
+            kwargs['boundary'] = boundary[0]
+        elif boundary:
+            kwargs['boundary'] = boundary
+
+        test_space  = self.space
+        unique_grid = test_space.unique_grid
+        kwargs['unique_grid'] = unique_grid
+        
         BasicDiscrete.__init__(self, expr, kernel_expr, **kwargs)
 
         # ...
-        quad_order = kwargs.pop('quad_order', None)
-        boundary   = kwargs.pop('boundary',   None)
-        # ...
 
+        quad_order  = kwargs.pop('quad_order', None)
+        boundary    = kwargs.pop('boundary',   None)
+        target      = kwargs.pop('target', None)
+        
+
+        # ...
+        # ...
+        if not unique_grid:
+            assert isinstance(test_space, ProductFemSpace)
+            test_space  = test_space.spaces
+
+            if boundary is None:
+
+                for space in test_space:
+                    if space.symbolic_space.domain==target:
+                        test_space = [space]
+                        break
+            elif isinstance(boundary, Boundary):
+
+                for space in test_space:
+                    if space.symbolic_space.domain==boundary.domain:
+                        test_space = [space]
+                        break        
+        else:
+            test_space  = [test_space]
+            
         # ...
         if boundary is None:
-            self._grid = QuadratureGrid( self.space, quad_order = quad_order )
+            self._grid = [QuadratureGrid( space, quad_order = quad_order ) for space in test_space] 
 
-        else:
-            self._grid = BoundaryQuadratureGrid( self.space,
-                                                 boundary.axis,
-                                                 boundary.ext,
-                                                 quad_order = quad_order )
+        elif isinstance(boundary, sym_Boundary):
+            axis = boundary.axis
+            ext  = boundary.ext
+            self._grid = [BoundaryQuadratureGrid( space, axis, ext,
+                         quad_order = quad_order ) for space in test_space]
+
+        elif isinstance(boundary, sym_Connectivity):
+                edge = list(boundary)[0]
+                boundary = boundary[edge]
+                axis     = boundary[0].axis
+                ext      = [bd.ext for bd in boundary]
+                self._grid = [BoundaryQuadratureGrid( space, axis,
+                             e, quad_order = quad_order ) for space,e in zip(test_space, ext)]
+
         # ...
 
-        # ...
-        self._test_basis = BasisValues( self.space, self.grid,
+        self._test_basis = BasisValues( test_space, self.grid,
                                         nderiv = self.max_nderiv )
         # ...
 
@@ -366,7 +405,7 @@ class DiscreteFunctional(BasicDiscrete):
         return self._test_basis
 
     def assemble(self, **kwargs):
-        newargs = (self.space, self.grid, self.test_basis)
+        newargs = (self.space, *self.grid, self.test_basis)
 
         if self.mapping:
             newargs = newargs + (self.mapping,)

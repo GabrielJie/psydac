@@ -252,25 +252,36 @@ class BasisValues():
             
         self._spans = []
         self._basis = []
-        # TODO quad_order in FemAssemblyGrid must be be the order and not the
+        # TODO quad_order in FemAssemblyGrid must be  the order and not the
         # degree
-        
+
         for grid,space in zip(grids, V):
             quad_order = [q-1 for q in grid.quad_order]
         
             quad_grid = create_fem_assembly_grid( space,
                         quad_order=quad_order,nderiv=nderiv )
-
-            self._spans += [[g.spans for g in quad_grid]]
-            self._basis += [[g.basis for g in quad_grid]] 
+            
+            if isinstance(space, ProductFemSpace):
+                self._spans += [[g.spans for g in qg] for qg in quad_grid]
+                self._basis += [[g.basis for g in qg] for qg in quad_grid]                
+            else:
+                self._spans += [[g.spans for g in quad_grid]]
+                self._basis += [[g.basis for g in quad_grid]] 
             
             if isinstance(grid, BoundaryQuadratureGrid):
                 axis = grid.axis
                 ext  = grid.ext
-                sp_space = space.spaces[axis]
-                points = grid.points[axis]
-                boundary_basis = basis_ders_on_quad_grid(sp_space.knots, sp_space.degree, points, nderiv)
-                self._basis[-1][axis][0:1,:,:,0:1] = boundary_basis
+                if isinstance(space, ProductFemSpace):
+                    for i in range(len(space.spaces)):
+                        sp_space = space.spaces[i].spaces[axis]
+                        points = grid.points[axis]
+                        boundary_basis = basis_ders_on_quad_grid(sp_space.knots, sp_space.degree, points, nderiv)
+                        self._basis[i][axis][0:1,:,:,0:1] = boundary_basis
+                else:
+                    sp_space = space.spaces[axis]
+                    points = grid.points[axis]
+                    boundary_basis = basis_ders_on_quad_grid(sp_space.knots, sp_space.degree, points, nderiv)
+                    self._basis[-1][axis][0:1,:,:,0:1] = boundary_basis
             
     @property
     def basis(self):
