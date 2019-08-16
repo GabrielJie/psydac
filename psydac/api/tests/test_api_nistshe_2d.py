@@ -11,7 +11,7 @@ from sympde.topology import ScalarFunctionSpace, VectorFunctionSpace
 from sympde.topology import ProductSpace
 from sympde.topology import element_of
 from sympde.topology import Boundary, NormalVector, TangentVector
-from sympde.topology import Domain, Line, Square, Cube, two_patches_Square
+from sympde.topology import Domain, Line, Square, Cube
 from sympde.topology import Trace, trace_0, trace_1
 from sympde.topology import Union
 from sympde.expr import BilinearForm, LinearForm
@@ -36,6 +36,40 @@ from mpl_toolkits.mplot3d import Axes3D
 from matplotlib import animation
 
 kwargs = {'settings':{'solver':'cg', 'tol':1e-9, 'maxiter':1000, 'verbose':False}}
+
+#==============================================================================
+def two_patches_Square():
+
+    from sympde.topology import InteriorDomain
+    from sympde.topology import Connectivity
+
+    A = Square('A')
+    B = Square('B')
+
+    A = A.interior
+    B = B.interior
+
+    connectivity = Connectivity()
+
+    bnd_A_1 = Boundary('Gamma_1', A, axis=0, ext=-1)
+    bnd_A_2 = Boundary('Gamma_2', A, axis=0, ext=1)
+    bnd_A_3 = Boundary('Gamma_3', A, axis=1, ext=-1)
+    bnd_A_4 = Boundary('Gamma_4', A, axis=1, ext=1)
+
+    bnd_B_1 = Boundary('Gamma_1', B, axis=0, ext=-1)
+    bnd_B_2 = Boundary('Gamma_2', B, axis=0, ext=1)
+    bnd_B_3 = Boundary('Gamma_3', B, axis=1, ext=-1)
+    bnd_B_4 = Boundary('Gamma_4', B, axis=1, ext=1)
+
+    connectivity['I'] = (bnd_A_2, bnd_B_1)
+
+    Omega = Domain('Omega',
+                   interiors=[A, B],
+                   boundaries=[bnd_A_1, bnd_A_2, bnd_A_3, bnd_A_4, bnd_B_1, bnd_B_2, bnd_B_3, bnd_B_4],
+                   connectivity=connectivity)
+
+    return Omega
+
 #==============================================================================
 def run_laplace_2d_nitsche_dir(solution, f, ncells, degree, s, kappa, comm=None):
 
@@ -54,16 +88,16 @@ def run_laplace_2d_nitsche_dir(solution, f, ncells, degree, s, kappa, comm=None)
     u = element_of(V, name='u')
 
     a0  = BilinearForm((u,v), dot(grad(v),grad(u)))
-    
+
     a_B = BilinearForm((u,v), -s*trace_0(u, B)*trace_1(grad(v), B) \
                               -trace_0(v, B)*trace_1(grad(u), B) \
                               +kappa*trace_0(u, B) * trace_0(v, B))
-    
+
     a = BilinearForm((u,v), a0(u,v) + a_B(u,v))
 
     l0  = LinearForm(v, f*v)
     l_B = LinearForm(v, -s*solution*trace_1(grad(v),B)+ kappa*solution*trace_0(v, B))
-    
+
     l   = LinearForm(v, l0(v) + l_B(v))
 
     error = F-solution
@@ -105,29 +139,29 @@ def run_laplace_2d_nitsche_dir(solution, f, ncells, degree, s, kappa, comm=None)
     #  integrand = lambda *x:(phi(*x)-model(*x))**2
     #
     #  l2_error = np.sqrt( Vh.integral( integrand ) )
-    
+
     # ... compute norms
 
     l2_error = l2norm_h.assemble(F=phi)
     h1_error = h1norm_h.assemble(F=phi)
-    
-   
+
+
     return l2_error, h1_error
 
 #==============================================================================
 def run_maxwell_2d_nitsche_dir(solution, f, ncells, degree, s, kappa, mu, comm=None):
-  
+
     # ... abstract model
     domain = Square()
 
     B = domain.boundary
 
     V = VectorFunctionSpace('V', domain,kind='h1')
-    
+
     nn = NormalVector('nn')
 
     F = element_of(V, name='F')
-    
+
     error    = Tuple(F[0]-solution[0], F[1]-solution[1])
     l2norm  = Norm(error, domain, kind='l2')
     h1norm  = Norm(error, domain, kind='h1')
@@ -139,11 +173,11 @@ def run_maxwell_2d_nitsche_dir(solution, f, ncells, degree, s, kappa, mu, comm=N
     a_B = BilinearForm((E,P), -s*trace_0(cross(P,nn), B)*trace_0(curl(E), B) \
                               -trace_0(cross(E,nn), B)*trace_0(curl(P), B) \
                               +kappa*trace_0(cross(E,nn), B) * trace_0(cross(P,nn), B))
-                              
+
     l0   = LinearForm(P, dot(f,P))
     l_B  = LinearForm(P, -cross(solution,nn)*trace_0(curl(P),B) + kappa*cross(solution,nn)*trace_0(cross(P,nn),B))
     # ...
-    
+
     l   = LinearForm(P, l0(P) + l_B(P))
     a   = BilinearForm((E,P), a0(E,P) + a_B(E,P))
 
@@ -166,7 +200,7 @@ def run_maxwell_2d_nitsche_dir(solution, f, ncells, degree, s, kappa, mu, comm=N
     # ... discretize norms
     l2norm_h = discretize(l2norm, domain_h, Vh)
     h1norm_h = discretize(h1norm, domain_h, Vh)
-    
+
     # ... solve the equation
 #    x = equation_h.solve(**kwargs)
     equation_h.assemble()
@@ -175,15 +209,15 @@ def run_maxwell_2d_nitsche_dir(solution, f, ncells, degree, s, kappa, mu, comm=N
     # ...
     # ...
     x = spsolve(lhs, rhs)
-    
+
     x = array_to_stencil(x, Vh.vector_space)
-    
+
     phi = FemField( Vh, x )
     # ...
 
     l2_error = l2norm_h.assemble(F=phi)
     h1_error = h1norm_h.assemble(F=phi)
-    
+
     return l2_error, h1_error
 
 
@@ -201,8 +235,8 @@ def run_laplace_2d_2_patchs_nitsche_dir(solution, f, ncells, degree, kappa, comm
     B = domain.connectivity
     B1 = list(B._data.values())[0][0]
     B2 = list(B._data.values())[0][-1]
-    
-    bd1 = Union(*domain.boundary.args[::2]) 
+
+    bd1 = Union(*domain.boundary.args[::2])
     bd2 = Union(*domain.boundary.args[1::2])
 
     v1 = element_of(V1, name='v1')
@@ -218,38 +252,38 @@ def run_laplace_2d_2_patchs_nitsche_dir(solution, f, ncells, degree, kappa, comm
                                 +0.5*trace_0(u2, B2) * trace_1(grad(v2), B2)\
                                 +0.5*trace_0(u2, B) * trace_1(grad(v1), B)\
                                  +0.5*trace_0(u1, B) * trace_1(grad(v2), B)\
-                                
+
                                 -0.5*trace_0(v1, B1) * trace_1(grad(u1), B1)\
                                 +0.5*trace_0(v2, B2) * trace_1(grad(u2), B2)\
                                 +0.5*trace_0(v2, B) * trace_1(grad(u1), B)\
                                 +0.5*trace_0(v1, B) * trace_1(grad(u2), B)\
-                                
+
                               +kappa*trace_0(u1, B1) * trace_0(v1, B1)\
                               +kappa*trace_0(u2, B2) * trace_0(v2, B2)\
                               -kappa*trace_0(u1, B) * trace_0(v2, B)\
                               -kappa*trace_0(u2, B) * trace_0(v1, B)\
                                     )
-                            
-    
-    
-    a = BilinearForm(((u1,u2),(v1,v2)), 
+
+
+
+    a = BilinearForm(((u1,u2),(v1,v2)),
                                        a0((u1,u2),(v1,v2))\
                                        +a_B((u1,u2),(v1,v2))\
                                       )
 
     l0  = LinearForm((v1,v2), f*v1+ f*v2)
-    
+
     l   = LinearForm((v1,v2), l0(v1,v2))
 
     bc1 = EssentialBC(u1, 0, bd1.complement(B1))
     bc2 = EssentialBC(u2, 0, bd2.complement(B2))
-   
+
     bc1._index_component = [0]
     bc1._position        = 0
     bc2._index_component = [1]
     bc2._position        = 0
-    
-    
+
+
     equation = find((u1,u2), forall=(v1,v2), lhs=a((u1,u2),(v1,v2)), rhs=l(v1,v2), bc=[bc1, bc2])
     # ...
     for i in equation.bc:
@@ -264,17 +298,17 @@ def run_laplace_2d_2_patchs_nitsche_dir(solution, f, ncells, degree, kappa, comm
     Vh2 = discretize(V2, domain_h2, degree=degree,xmin=[0.5, 0.])
     # ...
     S = Vh1*Vh2
-    
+
     # ... dsicretize the equation using Dirichlet bc
     equation_h = discretize(equation, domain_h1, [S, S])
-    
+
     equation_h.assemble()
-    
+
     lhs = equation_h.linear_system.lhs.tosparse().tocsr()
     rhs = equation_h.linear_system.rhs.toarray()
 
     x = spsolve(lhs, rhs)
-    
+
     x = array_to_stencil(x, S.vector_space)
     # ...
 
@@ -282,63 +316,61 @@ def run_laplace_2d_2_patchs_nitsche_dir(solution, f, ncells, degree, kappa, comm
     phi1 = FemField( Vh1, x[0] )
     phi2 = FemField( Vh2, x[1] )
     # ...
-    
+
     k1, k2 = np.pi,np.pi
     model = lambda x,y:np.sin(k1*x)*np.sin(k2*y)
-    
-    # ...
-    fig, axs   = plt.subplots(1,2, sharey=True)
-    fig2, axs2 = plt.subplots(1,2, sharey=True)
 
-    x1      = list(np.linspace( 0., 0.5, 101 ))
-    x2      = list(np.linspace( 0.5, 1., 101 ))
-    y       = np.linspace( 0., 1., 101 )
+#    # ...
+#    fig, axs   = plt.subplots(1,2, sharey=True)
+#    fig2, axs2 = plt.subplots(1,2, sharey=True)
+#
+#    x1      = list(np.linspace( 0., 0.5, 101 ))
+#    x2      = list(np.linspace( 0.5, 1., 101 ))
+#    y       = np.linspace( 0., 1., 101 )
+#
+#    phi1    = np.array( [[phi1(xi, yj) for xi in x1] for yj in y] )
+#    phi2    = np.array( [[phi2(xi, yj) for xi in x2] for yj in y] )
+#
+#    X1, Y = np.meshgrid(x1, y)
+#    X2, Y = np.meshgrid(x2, y)
+#
+#    axs[0].contourf(X1, Y, phi1)
+#    cp = axs[1].contourf(X2, Y, phi2)
+#
+#    fig.colorbar(cp)
+#
+#    Z1  = np.array( [[model(xi, yj) for xi in x1] for yj in y] )
+#    Z2  = np.array( [[model(xi, yj) for xi in x2] for yj in y] )
+#
+#    axs2[0].contourf(X1, Y, Z1)
+#    cp2 = axs2[1].contourf(X2, Y, Z2)
+#
+#    fig2.colorbar(cp2)
+#
+#    plt.show()
 
-    phi1    = np.array( [[phi1(xi, yj) for xi in x1] for yj in y] )
-    phi2    = np.array( [[phi2(xi, yj) for xi in x2] for yj in y] )
-    
-    X1, Y = np.meshgrid(x1, y)
-    X2, Y = np.meshgrid(x2, y)
-    
-    axs[0].contourf(X1, Y, phi1)   
-    cp = axs[1].contourf(X2, Y, phi2)
-    
-    fig.colorbar(cp)
-    
-    Z1  = np.array( [[model(xi, yj) for xi in x1] for yj in y] )
-    Z2  = np.array( [[model(xi, yj) for xi in x2] for yj in y] )
-    
-    axs2[0].contourf(X1, Y, Z1)   
-    cp2 = axs2[1].contourf(X2, Y, Z2) 
-    
-    fig2.colorbar(cp2)
-    
-    plt.show()
-    
 
-#==========================================================================================
-#==========================================================================================
-#==========================================================================================
-
+#==============================================================================
 def test_api_laplace_2d_nitsche_dir():
 
     from sympy.abc import x,y
 
     k1, k2 = pi/3,5*pi/3
     xc, yc = 1/3, 1/4
-    
+
     solution = sin(k1*(x-xc))*sin(k2*(y-yc))
     f        = -solution.diff(x,2) - solution.diff(y,2)
-    
-    l2_error, h1_error = run_laplace_2d_nitsche_dir(solution, f, ncells=[2**3,2**3], 
+
+    l2_error, h1_error = run_laplace_2d_nitsche_dir(solution, f, ncells=[2**3,2**3],
                                                     degree=[2,2], s=1, kappa=10**20)
-    
+
     expected_l2_error =  0.00037843634364452175
     expected_h1_error =  0.02192134807021331
 
     assert( abs(l2_error - expected_l2_error) < 1.e-7)
     assert( abs(h1_error - expected_h1_error) < 1.e-7)
 
+#==============================================================================
 def test_api_maxwell_2d_nitsche_dir():
 
     from sympy.abc import x,y
@@ -349,13 +381,13 @@ def test_api_maxwell_2d_nitsche_dir():
     xc = 1.0 / 3.0
     yc = 1.0 / 4.0
     mu = 1.0
-    
-    solution = Tuple(cos(k1*(x-xc))*sin(k2*(y-yc)), 
+
+    solution = Tuple(cos(k1*(x-xc))*sin(k2*(y-yc)),
                     sin(k1*(x-xc))*cos(k2*(y-yc)))
 
     f        = solution
-    
-    l2_error, h1_error = run_maxwell_2d_nitsche_dir(solution, f, ncells=[2**5,2**5], 
+
+    l2_error, h1_error = run_maxwell_2d_nitsche_dir(solution, f, ncells=[2**5,2**5],
                                                     degree=[2,2], s=1, kappa=10**15, mu=mu)
 
     expected_l2_error =  0.0003460526398200829
@@ -364,15 +396,16 @@ def test_api_maxwell_2d_nitsche_dir():
     assert( abs(l2_error - expected_l2_error) < 1.e-7)
     assert( abs(h1_error - expected_h1_error) < 1.e-7)
 
+#==============================================================================
 def test_api_2_patchs_2d_nitsche_dir():
 
     from sympy.abc import x,y
     from sympy import pi,sin
-    
+
     solution = sin(pi*x)*sin(pi*y)
     f       = pi**2*solution
-    
-    run_laplace_2d_2_patchs_nitsche_dir(solution, f, ncells=[2**3,2**3], 
+
+    run_laplace_2d_2_patchs_nitsche_dir(solution, f, ncells=[2**3,2**3],
                                                     degree=[2,2], kappa=10**10)
 
 #==============================================================================
@@ -387,5 +420,5 @@ def teardown_function():
     from sympy import cache
     cache.clear_cache()
 
-teardown_module()
-test_api_maxwell_2d_nitsche_dir()
+#teardown_module()
+#test_api_maxwell_2d_nitsche_dir()
