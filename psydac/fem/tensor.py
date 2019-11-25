@@ -168,7 +168,8 @@ class TensorFemSpace( FemSpace ):
         # Get contiguous copy of the spline coefficients required for evaluation
         index  = tuple( index )
         coeffs = field.coeffs[index].copy()
-        
+        #print(bases)
+        #raise
         # Evaluation of multi-dimensional spline
         # TODO: optimize
 

@@ -113,6 +113,7 @@ def run_system_2_2d_dir(f1, f2,u1, u2, ncells, degree):
     equation = find([u,p], forall=[v,q], lhs=a((u,p),(v,q)), rhs=l(v,q), bc=bc)
 
     error = Matrix([F[0]-u1, F[1]-u2])
+
     l2norm_F = Norm(error, domain, kind='l2')
 
     # ... create the computational domain from a topological domain
@@ -159,19 +160,21 @@ def run_system_2_2d_dir(f1, f2,u1, u2, ncells, degree):
     M_1[v2h_s:-1,-1]  = rhs[v2h_s:]
     rhs_1[:v2h_s]   = rhs[:v2h_s] 
 
-    M_inv = linalg.inv(M_1)
-    x = M_inv.dot(rhs_1)
+    x = np.linalg.solve(M_1, rhs_1)
     
     phi1 = VectorFemField(V1h)
     phi2 = FemField(V2h)
+    phi3 = FemField(V1h.spaces[0])
 
     
     phi1.coeffs[0][s11:e11+1, s12:e12+1] = x[:(e11+1)*(e12+1)].reshape((e11+1-s11, e12+1-s12))
     phi1.coeffs[1][s21:e21+1, s22:e22+1] = x[(e11+1)*(e12+1):v2h_s].reshape((e21+1-s21, e22+1-s22))
     phi2.coeffs[s31:e31+1, s32:e32+1]    = x[v2h_s:-1].reshape((e31-s31+1, e32-s32+1))
+    phi3.coeffs[:,:]                     = phi1.coeffs[0][:,:]
     
         # ... compute norms
     l2_error = l2norm_F_h.assemble(F=phi1)
+
     return l2_error
 
 ###############################################################################
@@ -196,3 +199,17 @@ def test_api_system_2_2d_dir_1():
     p  = sin(2*pi*x) - sin(2*pi*y)
     
     x = run_system_2_2d_dir(f1, f2, u1, u2, ncells=[2**3,2**3], degree=[2,2])
+
+def test_api_system_2_2d_dir_1():
+    from sympy.abc import x,y
+    from sympy import Float
+    Ra = 0.1
+    f1 = Float(0)
+    f2 = Ra*(1-y+ 3*y**2)
+    u1 = Float(0)
+    u2 = Float(0)
+    p  = Ra*(y**3 - y**2/2 +y-7/12)
+    
+    x = run_system_2_2d_dir(f1, f2, u1, u2, ncells=[2**3,2**3], degree=[3,3])
+    print(x)
+test_api_system_2_2d_dir_1()

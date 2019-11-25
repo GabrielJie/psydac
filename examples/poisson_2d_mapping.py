@@ -111,8 +111,8 @@ class Poisson2D:
         $\phi(x,y) = 4(r-rmin)(rmax-r)/(rmax-rmin)^2 \sin(2\pi x) \sin(2\pi y)$.
 
         """
-        domain   = ((rmin,rmax),(0,2*np.pi))
-        periodic = (False, True)
+        domain   = ((rmin,rmax),(0, np.pi))
+        periodic = (False, False)
         mapping  = Annulus()
 
         from sympy import symbols, sin, cos, pi, lambdify
@@ -531,7 +531,7 @@ def main( *, test_case, ncells, degree, use_spline_mapping, c1_correction, distr
     if test_case == 'square':
         model = Poisson2D.new_square( mx=1, my=1 )
     elif test_case == 'annulus':
-        model = Poisson2D.new_annulus( rmin=0.1, rmax=1.0 )
+        model = Poisson2D.new_annulus( rmin=0.5, rmax=1.0 )
     elif test_case == 'circle':
         model = Poisson2D.new_circle()
     elif test_case == 'target':
@@ -696,6 +696,7 @@ def main( *, test_case, ncells, degree, use_spline_mapping, c1_correction, distr
     sqrt_g    = lambda *x: np.sqrt( mapping.metric_det( x ) )
     integrand = lambda *x: (phi(*x)-model.phi(*x))**2 * sqrt_g(*x)
     err2 = np.sqrt( V.integral( integrand ) )
+    print(err2)
     t1 = time()
     timing['diagnostics'] = t1-t0
 
@@ -762,7 +763,7 @@ def main( *, test_case, ncells, degree, use_spline_mapping, c1_correction, distr
     eta2 = refine_array_1d( V2.breaks[sk2:ek2+2], N )
     num = np.array( [[      phi( e1,e2 ) for e2 in eta2] for e1 in eta1] )
     ex  = np.array( [[model.phi( e1,e2 ) for e2 in eta2] for e1 in eta1] )
-    err = num - ex
+    err = abs(num - ex)
 
     # Compute physical coordinates of logical grid
     pcoords = np.array( [[model.mapping( [e1,e2] ) for e2 in eta2] for e1 in eta1] )

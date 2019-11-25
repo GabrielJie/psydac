@@ -567,9 +567,10 @@ def test_api_laplace_2d_neu_identity():
 
     expected_l2_error =  0.00021728465388208586
     expected_h1_error =  0.012984852988123631
-
+    
     assert( abs(l2_error - expected_l2_error) < 1.e-7)
     assert( abs(h1_error - expected_h1_error) < 1.e-7)
+    print('done')
 
 #==============================================================================
 def test_api_biharmonic_2d_dir_identity():
@@ -645,3 +646,5 @@ def teardown_module():
 def teardown_function():
     from sympy import cache
     cache.clear_cache()
+
+test_api_laplace_2d_neu_identity()

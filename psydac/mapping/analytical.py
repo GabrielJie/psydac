@@ -144,6 +144,7 @@ class AnalyticalMapping( Mapping, metaclass=AnalyticalMappingMeta ):
 
         # Callable function: __call__
         expr = sym.simplify( cls.symbolic.map.subs( params ) )
+
         self._func_eval = sym.lambdify( [eta_symbols], expr, 'numpy' )
 
         # Callable function: jac_mat
